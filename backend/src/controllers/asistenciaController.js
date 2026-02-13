@@ -54,7 +54,12 @@ export const getConstanteOficinas = async (req, res) => {
   try {
     const rows = await constanteOficinasService();
     const firstRow = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-    const valorFin = firstRow?.ValorFin ?? firstRow?.valorFin ?? null;
+    const valorFin =
+      firstRow?.ValorFin ??
+      firstRow?.valorFin ??
+      firstRow?.ValorFinal ??
+      firstRow?.valorFinal ??
+      null;
     res.json({ success: true, valorFin, data: rows });
   } catch (error) {
     console.error('Error al obtener constante de oficinas:', error);

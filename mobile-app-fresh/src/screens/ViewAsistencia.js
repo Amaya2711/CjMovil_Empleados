@@ -237,10 +237,19 @@ export default function ViewAsistencia() {
           if (constanteOficinas && !constanteOficinas.error) {
             const valorFinResponse =
               constanteOficinas?.valorFin ??
+              constanteOficinas?.valorFinal ??
               (Array.isArray(constanteOficinas?.data) && constanteOficinas.data[0]
-                ? (constanteOficinas.data[0].ValorFin ?? constanteOficinas.data[0].valorFin ?? null)
+                ? (
+                    constanteOficinas.data[0].ValorFin ??
+                    constanteOficinas.data[0].valorFin ??
+                    constanteOficinas.data[0].ValorFinal ??
+                    constanteOficinas.data[0].valorFinal ??
+                    null
+                  )
                 : null);
             setValorFin(valorFinResponse);
+          } else if (constanteOficinas?.error) {
+            setMessage(constanteOficinas?.message || 'No se pudo obtener ValorFin');
           }
 
           const usuarioCre = cuadrilla;

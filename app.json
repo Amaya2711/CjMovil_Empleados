@@ -1,0 +1,18 @@
+{
+  "android": {
+    "package": "com.mas2711.cjtelecom_movil"
+  },
+  "plugins": [
+    "expo-font",
+    "expo-router"
+  ],
+  "extra": {
+    "router": {
+      "origin": false
+    },
+    "eas": {
+      "projectId": "ef125c0d-95a6-4fb7-b574-007702efebba"
+    }
+  },
+  "owner": "mas2711"
+}

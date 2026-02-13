@@ -1,0 +1,22 @@
+# Este workflow asegura que la fuente MaterialCommunityIcons esté siempre en el build de producción
+name: Copy Fonts Before Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  copy-fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Instalar dependencias
+        run: npm install
+      - name: Copiar fuentes necesarias
+        run: npm run copy-fonts
+      - name: Continuar con el build (ejemplo)
+        run: echo "Listo para el build de producción"

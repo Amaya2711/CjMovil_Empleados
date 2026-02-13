@@ -1,4 +1,3 @@
-import 'react-native-get-random-values';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import * as Font from 'expo-font';
 import { AppState, Platform, View, Text } from 'react-native';

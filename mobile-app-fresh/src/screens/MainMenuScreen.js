@@ -11,7 +11,7 @@ export default function MainMenuScreen({ navigation }) {
     navigation.replace('Login');
   };
   const OPTIONS = [
-    { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado'); navigation.navigate('ReportePagos'); } },
+    { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado.'); navigation.navigate('ReportePagos'); } },
     { label: 'Asistencia', onPress: () => { navigation.navigate('ViewAsistencia'); } },
   ];
   return (

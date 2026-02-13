@@ -1,8 +1,9 @@
 import React, { useContext, useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText } from 'react-native';
 import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, Paragraph, MD3Colors } from 'react-native-paper';
+import { useFocusEffect } from '@react-navigation/native';
 import { UserContext } from '../context/UserContext';
-import { getAsistencia, registerAsistencia } from '../api/asistencia';
+import { eliminarAsistenciaPrueba, getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
 import * as Location from 'expo-location';
 import { useCallback, useMemo } from 'react';
 
@@ -22,6 +23,8 @@ const getLimaDate = () => {
 
 export default function ViewAsistencia() {
   const SHOW_SALIDA_BUTTON = false;
+  const MAX_DISTANCE_METERS = 50;
+  const MAX_GPS_ACCURACY_METERS = 20;
   const { codEmp, idusuario, cuadrilla } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('REGISTRO');
   const [selectedResumenEstado, setSelectedResumenEstado] = useState(null);
@@ -36,14 +39,21 @@ export default function ViewAsistencia() {
   const [pendingTipo, setPendingTipo] = useState(null);
   const [pendingCoords, setPendingCoords] = useState(null);
   const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
+  const [loadingCompareLocation, setLoadingCompareLocation] = useState(false);
+  const [loadingEliminarPrueba, setLoadingEliminarPrueba] = useState(false);
   const [hasLocation, setHasLocation] = useState(true);
-  const MIN_ACCURACY = 100; // metros
+  const [idEstadoDiario, setIdEstadoDiario] = useState(null);
+  const [valorFin, setValorFin] = useState(null);
+  const [currentCoords, setCurrentCoords] = useState(null);
+  const MIN_ACCURACY = MAX_GPS_ACCURACY_METERS; // metros
   const pageSize = 31; // show up to 31 records in one page by default
   //const [pendingCoords, setPendingCoords] = useState(null);
   const mounted = useRef(true);
 
   useEffect(() => {
-    // removed verbose debug logging to keep console clean
+    const source = Array.isArray(data) ? data : [];
+    console.log('[ViewAsistencia][RESUMEN] Total de registros:', source.length);
+    console.log('[ViewAsistencia][RESUMEN] Registros cargados:', source);
   }, [data]);
 
   
@@ -102,15 +112,99 @@ export default function ViewAsistencia() {
           }
         };
 
-        useEffect(() => {
-          mounted.current = true;
-          // Comprobar estado de ubicación al montar
-          checkLocationEnabled();
-          fetchData();
-          return () => {
-            mounted.current = false;
+        const formatEstadoLabel = (val) => {
+          const raw = val === null || typeof val === 'undefined' ? '' : String(val).trim();
+          if (!raw) return 'SIN ESTADO';
+          if (raw === '0') return 'NO LLENADO';
+          return raw;
+        };
+
+        const parseReferenceCoords = (referenceValue) => {
+          if (!referenceValue && referenceValue !== 0) return null;
+
+          const toNumber = (value) => {
+            if (value === null || typeof value === 'undefined') return NaN;
+            const normalized = String(value).trim().replace(',', '.');
+            return Number(normalized);
           };
-        }, []);
+
+          const isValidLatitude = (value) => Number.isFinite(value) && value >= -90 && value <= 90;
+          const isValidLongitude = (value) => Number.isFinite(value) && value >= -180 && value <= 180;
+
+          const normalizeLatLon = (first, second) => {
+            const a = toNumber(first);
+            const b = toNumber(second);
+            if (isValidLatitude(a) && isValidLongitude(b)) {
+              return { latitude: a, longitude: b };
+            }
+            // Algunos formatos pueden venir como lon,lat
+            if (isValidLatitude(b) && isValidLongitude(a)) {
+              return { latitude: b, longitude: a };
+            }
+            return null;
+          };
+
+          if (typeof referenceValue === 'object') {
+            const latObj = referenceValue?.Latitud ?? referenceValue?.lat ?? referenceValue?.latitude ?? null;
+            const lonObj = referenceValue?.Longitud ?? referenceValue?.lon ?? referenceValue?.longitude ?? null;
+            if (latObj !== null && lonObj !== null) {
+              const normalized = normalizeLatLon(latObj, lonObj);
+              if (normalized) return normalized;
+            }
+          }
+
+          const raw = String(referenceValue).trim();
+          if (!raw) return null;
+
+          // Formato típico: "lat,lon" o "lat;lon" o "lat lon"
+          const pairMatch = raw.match(/^\s*(-?\d+(?:[\.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[\.,]\d+)?)\s*$/);
+          if (pairMatch) {
+            const normalized = normalizeLatLon(pairMatch[1], pairMatch[2]);
+            if (normalized) return normalized;
+          }
+
+          // Fallback para formatos con texto (ej. POINT(-76.95 -12.07))
+          const matches = raw.match(/-?\d+(?:\.\d+)?/g);
+          if (!matches || matches.length < 2) return null;
+          return normalizeLatLon(matches[0], matches[1]);
+        };
+
+        const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+          const toRadians = (value) => (value * Math.PI) / 180;
+          const earthRadius = 6371000;
+          const dLat = toRadians(lat2 - lat1);
+          const dLon = toRadians(lon2 - lon1);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          return earthRadius * c;
+        };
+
+        const getDistanceToRequiredPoint = (coords) => {
+          if (coords?.latitude === null || typeof coords?.latitude === 'undefined' || coords?.longitude === null || typeof coords?.longitude === 'undefined') return null;
+          const refCoords = parseReferenceCoords(valorFin);
+          if (!refCoords) return null;
+          return calculateDistanceMeters(
+            Number(coords.latitude),
+            Number(coords.longitude),
+            Number(refCoords.latitude),
+            Number(refCoords.longitude)
+          );
+        };
+
+        useFocusEffect(
+          useCallback(() => {
+            mounted.current = true;
+            checkLocationEnabled();
+            refreshCurrentCoordinates();
+            fetchData();
+            return () => {
+              mounted.current = false;
+            };
+          }, [cuadrilla, codEmp, idusuario])
+        );
 
         const checkLocationEnabled = async () => {
           try {
@@ -135,7 +229,45 @@ export default function ViewAsistencia() {
         const fetchData = async () => {
           setLoading(true);
           const idEmpleado = cuadrilla || codEmp || idusuario;
-          const res = await getAsistencia({ codEmp: idEmpleado });
+          const todayLima = getLimaDate();
+          const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
+
+          const constanteOficinas = await getConstanteOficinas();
+          if (!mounted.current) return;
+          if (constanteOficinas && !constanteOficinas.error) {
+            const valorFinResponse =
+              constanteOficinas?.valorFin ??
+              (Array.isArray(constanteOficinas?.data) && constanteOficinas.data[0]
+                ? (constanteOficinas.data[0].ValorFin ?? constanteOficinas.data[0].valorFin ?? null)
+                : null);
+            setValorFin(valorFinResponse);
+          }
+
+          const usuarioCre = cuadrilla;
+          if (!usuarioCre) {
+            setMessage('No se pudo validar el listado diario: cuadrilla no disponible.');
+            setLoading(false);
+            return;
+          }
+
+          const validacion = await validarListadoDiario({ usuarioCre });
+          if (!mounted.current) return;
+          if (!validacion || validacion.error) {
+            setMessage(validacion?.message || 'No se pudo validar el listado diario');
+            setLoading(false);
+            return;
+          }
+
+          const listadoDiario = Array.isArray(validacion?.data)
+            ? validacion.data
+            : Array.isArray(validacion)
+              ? validacion
+              : [];
+          const primerRegistro = listadoDiario[0] || null;
+          const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
+          setIdEstadoDiario(estado);
+
+          const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
           // response logged only when needed
           if (!mounted.current) return;
           // Manejo explícito y logging para depuración
@@ -161,6 +293,13 @@ export default function ViewAsistencia() {
           }
           setLoading(false);
         };
+
+        useEffect(() => {
+          const distance = getDistanceToRequiredPoint(currentCoords);
+          if (distance !== null && distance > MAX_DISTANCE_METERS) {
+            setMessage('La ubicación no es cercana al punto requerido (máximo 50 metros).');
+          }
+        }, [currentCoords, valorFin]);
 
         const requestLocationPermission = async () => {
           try {
@@ -196,6 +335,27 @@ export default function ViewAsistencia() {
           }
         };
 
+        const refreshCurrentCoordinates = async () => {
+          try {
+            const okPerm = await requestLocationPermission();
+            if (!okPerm) {
+              setCurrentCoords(null);
+              return;
+            }
+            const enabled = await checkLocationEnabled();
+            if (!enabled) {
+              setCurrentCoords(null);
+              return;
+            }
+            const coords = await getCurrentPosition();
+            if (!mounted.current) return;
+            setCurrentCoords(coords);
+          } catch (e) {
+            if (!mounted.current) return;
+            setCurrentCoords(null);
+          }
+        };
+
         const handleRegister = async (tipo) => {
           // Verificar permiso y estado de ubicación
           const okPerm = await requestLocationPermission();
@@ -211,6 +371,15 @@ export default function ViewAsistencia() {
           }
           try {
             const coords = await getCurrentPosition();
+            if (coords?.accuracy && coords.accuracy > MAX_GPS_ACCURACY_METERS) {
+              setMessage(`Precisión GPS insuficiente. Debe ser ≤ ${MAX_GPS_ACCURACY_METERS} m.`);
+              return;
+            }
+            const distance = getDistanceToRequiredPoint(coords);
+            if (distance !== null && distance > MAX_DISTANCE_METERS) {
+              setMessage('La ubicación no es cercana al punto requerido (máximo 50 metros).');
+              return;
+            }
             setPendingCoords(coords);
             setPendingTipo(tipo);
             setDialogVisible(true);
@@ -225,9 +394,17 @@ export default function ViewAsistencia() {
           setDialogVisible(false);
           setPendingTipo(null);
           setPendingCoords(null);
+
+          const usuarioAct = cuadrilla;
+          if (usuarioAct === null || typeof usuarioAct === 'undefined' || String(usuarioAct).trim() === '') {
+            setMessage('No se pudo registrar asistencia: cuadrilla no disponible.');
+            return;
+          }
+
           setLoading(true);
-          const idEmpleado = cuadrilla || codEmp || idusuario;
-          const res = await registerAsistencia({ codEmp: idEmpleado, tipo, lat: coords?.latitude, lon: coords?.longitude });
+          const todayLima = getLimaDate();
+          const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
+          const res = await registerAsistencia({ usuarioAct, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia });
           setLoading(false);
           if (res && !res.error) {
             setMessage(`${tipo} registrado correctamente`);
@@ -244,6 +421,63 @@ export default function ViewAsistencia() {
 
         const handleViewCurrentLocation = () => {
           setLocationDialogVisible(true);
+        };
+
+        const handleCompareLocations = async () => {
+          const okPerm = await requestLocationPermission();
+          if (!okPerm) {
+            setHasLocation(false);
+            setMessage('Permiso de ubicación no otorgado. Active la ubicación para continuar.');
+            return;
+          }
+          const enabled = await checkLocationEnabled();
+          if (!enabled) {
+            setMessage('La ubicación del dispositivo está desactivada. Active la ubicación para continuar.');
+            return;
+          }
+          try {
+            setLoadingCompareLocation(true);
+            const refCoords = parseReferenceCoords(valorFin);
+            if (!refCoords) {
+              setMessage('No se pudo obtener un punto válido en ValorFin para comparar.');
+              return;
+            }
+            const coords = await getCurrentPosition();
+            if (!mounted.current) return;
+            setCurrentCoords(coords);
+            const distance = getDistanceToRequiredPoint(coords);
+            if (distance === null) {
+              setMessage('No se pudo calcular la distancia entre los puntos.');
+              return;
+            }
+            const formattedDistance = `${distance.toFixed(2)} m`;
+            if (distance <= MAX_DISTANCE_METERS) {
+              setMessage(`Ubicación válida. Distancia al punto requerido: ${formattedDistance}.`);
+            } else {
+              setMessage(`La ubicación no es cercana al punto requerido. Distancia: ${formattedDistance}. Máximo permitido: ${MAX_DISTANCE_METERS} m.`);
+            }
+          } catch (e) {
+            setMessage('No se pudo comparar la ubicación actual con ValorFin.');
+          } finally {
+            setLoadingCompareLocation(false);
+          }
+        };
+
+        const handleEliminarPrueba = async () => {
+          try {
+            setLoadingEliminarPrueba(true);
+            const res = await eliminarAsistenciaPrueba();
+            if (res && !res.error) {
+              setMessage(res.message || 'Proceso ejecutado correctamente.');
+              await fetchData();
+            } else {
+              setMessage(res?.message || 'No se pudo ejecutar la eliminación de prueba.');
+            }
+          } catch (e) {
+            setMessage('Error al ejecutar eliminación de prueba.');
+          } finally {
+            setLoadingEliminarPrueba(false);
+          }
         };
 
         const closeLocationDialog = () => {
@@ -285,7 +519,7 @@ export default function ViewAsistencia() {
           try {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const estado = item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '';
+            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '');
             const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const estadoMarcacion = item.EstadoMarcacion ?? item.estadoMarcacion ?? '';
             return (
@@ -339,7 +573,7 @@ export default function ViewAsistencia() {
         const resumenData = useMemo(() => {
           const source = Array.isArray(data) ? data : [];
           const conteoPorEstado = source.reduce((acc, item) => {
-            const estado = String(item.Estado ?? item.estado ?? 'SIN ESTADO').trim() || 'SIN ESTADO';
+            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '');
             acc[estado] = (acc[estado] || 0) + 1;
             return acc;
           }, {});
@@ -359,7 +593,7 @@ export default function ViewAsistencia() {
           if (!selectedResumenEstado) return [];
           if (selectedResumenEstado === '__ALL__') return source;
           return source.filter(item => {
-            const estado = String(item.Estado ?? item.estado ?? 'SIN ESTADO').trim() || 'SIN ESTADO';
+            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '');
             return estado === selectedResumenEstado;
           });
         }, [data, selectedResumenEstado]);
@@ -428,7 +662,10 @@ export default function ViewAsistencia() {
               </Button>
               <Button
                 mode={activeTab === 'RESUMEN' ? 'contained' : 'outlined'}
-                onPress={() => setActiveTab('RESUMEN')}
+                onPress={() => {
+                  setActiveTab('RESUMEN');
+                  fetchData();
+                }}
                 style={styles.tabButton}
               >
                 RESUMEN
@@ -457,7 +694,7 @@ export default function ViewAsistencia() {
                     </Card.Content>
                   </Card>
                   <View style={styles.buttonsRow}>
-                    <Button mode="contained" buttonColor="#43A047" onPress={() => handleRegister('INGRESO')} style={styles.actionButton} loading={loading} disabled={loading || !hasLocation || hasRegistroHoy}>
+                    <Button mode="contained" buttonColor="#43A047" onPress={() => handleRegister('INGRESO')} style={styles.actionButton} loading={loading}>
                       INGRESO
                     </Button>
                     {SHOW_SALIDA_BUTTON && (
@@ -466,6 +703,36 @@ export default function ViewAsistencia() {
                       </Button>
                     )}
                   </View>
+                  <Text style={styles.valorFinText}>
+                    ValorFin: {valorFin === null || typeof valorFin === 'undefined' || String(valorFin).trim() === '' ? 'N/D' : String(valorFin)}
+                  </Text>
+                  <Text style={styles.coordsText}>
+                    Latitud: {currentCoords?.latitude ? currentCoords.latitude.toFixed(6) : 'N/D'}
+                  </Text>
+                  <Text style={styles.coordsText}>
+                    Longitud: {currentCoords?.longitude ? currentCoords.longitude.toFixed(6) : 'N/D'}
+                  </Text>
+                  <Text style={styles.coordsText}>
+                    Precisión: {currentCoords?.accuracy ? `${currentCoords.accuracy} m` : 'N/D'}
+                  </Text>
+                  <Button
+                    mode="outlined"
+                    onPress={handleCompareLocations}
+                    style={styles.compareButton}
+                    loading={loadingCompareLocation}
+                    disabled={loadingCompareLocation || !hasLocation}
+                  >
+                    COMPARAR UBICACIONES
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={handleEliminarPrueba}
+                    style={styles.deleteTestButton}
+                    loading={loadingEliminarPrueba}
+                    disabled={loadingEliminarPrueba}
+                  >
+                    EJECUTAR ELIMINAR PRUEBA
+                  </Button>
                   <Button
                     mode="outlined"
                     onPress={handleViewCurrentLocation}
@@ -599,6 +866,10 @@ export default function ViewAsistencia() {
         tabButton: { flex: 1, marginHorizontal: 4 },
         buttonsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
         actionButton: { flex: 1, marginHorizontal: 6, paddingVertical: 12 },
+        valorFinText: { marginTop: -4, marginBottom: 8, marginHorizontal: 6, color: '#231F36', fontSize: 13, fontWeight: '700' },
+        coordsText: { marginTop: 0, marginBottom: 4, marginHorizontal: 6, color: '#231F36', fontSize: 13 },
+        compareButton: { marginBottom: 8 },
+        deleteTestButton: { marginBottom: 8 },
         locationButton: { marginBottom: 12 },
         cardGrid: { flex: 1, marginTop: 8, minHeight: 720, paddingVertical: 8 },
         chartBox: { marginBottom: 12, padding: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, backgroundColor: '#fff' },

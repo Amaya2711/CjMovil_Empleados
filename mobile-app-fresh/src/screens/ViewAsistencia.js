@@ -254,7 +254,7 @@ export default function ViewAsistencia() {
 
           const usuarioCre = cuadrilla;
           if (!usuarioCre) {
-            setMessage('No se pudo validar el listado diario: cuadrilla no disponible.');
+            setMessage('.No se pudo validar el listado diario: cuadrilla no disponible.');
             setLoading(false);
             return;
           }

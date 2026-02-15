@@ -67,6 +67,8 @@ export default function LoginScreen({ navigation }) {
         });
 
         navigation.replace('MainMenu');
+      } else {
+        setError('La URL configurada no corresponde al backend API. Verifica EXPO_PUBLIC_API_BASE_URL.');
       }
     } catch (err) {
       if (err.response) {

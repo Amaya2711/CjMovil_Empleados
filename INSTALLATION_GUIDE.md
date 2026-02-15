@@ -37,11 +37,19 @@
    cd mobile-app
    npm install
    ```
-2. Inicia el proyecto:
+2. Configura la URL del backend antes de iniciar Expo:
+   ```bash
+   # PowerShell (Windows)
+   $env:EXPO_PUBLIC_API_BASE_URL="https://TU-BACKEND-API"
+   ```
+   Ejemplos en desarrollo local:
+   - Android emulador: `http://10.0.2.2:4000`
+   - iOS simulador / Web: `http://localhost:4000`
+3. Inicia el proyecto:
    ```bash
    npx expo start
    ```
-3. Escanea el QR con Expo Go o usa emulador.
+4. Escanea el QR con Expo Go o usa emulador.
 
 ### Pruebas
 - **Localhost:** Si pruebas en dispositivo real, expón el backend usando [ngrok](https://ngrok.com/) o similar:

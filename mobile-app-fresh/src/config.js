@@ -1,6 +1,14 @@
-// Archivo de configuración global para la URL base del servidor
-// Para desarrollo local, descomenta la siguiente línea y comenta la de producción:
-// export const BASE_URL = 'http://192.168.18.112:4000'; // URL CASA
+import { Platform } from 'react-native';
 
-//export const BASE_URL = 'http://192.168.0.52:4000'; // URL CASA
-export const BASE_URL = 'https://cjmovilempleados-production.up.railway.app';
+const normalizeBaseUrl = (value = '') => value.trim().replace(/\/+$/, '');
+
+const envBaseUrl = normalizeBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL || '');
+
+const defaultLocalBaseUrl = Platform.select({
+	android: 'http://10.0.2.2:4000',
+	ios: 'http://localhost:4000',
+	web: 'http://localhost:4000',
+	default: 'http://localhost:4000'
+});
+
+export const BASE_URL = envBaseUrl || defaultLocalBaseUrl;

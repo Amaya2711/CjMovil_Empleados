@@ -2,7 +2,7 @@ import React, { useState, useContext } from 'react';
 import { View, StyleSheet, Image, Platform } from 'react-native';
 import { TextInput, Button, Card, Snackbar } from 'react-native-paper';
 
-import axios from 'axios/dist/browser/axios.cjs';
+import axios from 'axios';
 import { BASE_URL } from '../config';
 import { UserContext } from '../context/UserContext';
 

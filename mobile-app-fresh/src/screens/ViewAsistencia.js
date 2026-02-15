@@ -254,30 +254,37 @@ export default function ViewAsistencia() {
 
           const usuarioCre = cuadrilla || idusuario || codEmp;
           if (!usuarioCre) {
-            setMessage('No se pudo validar el listado diario: cuadrilla no disponible.');
-            setLoading(false);
-            return;
-          }
-
-          const validacion = await validarListadoDiario({ usuarioCre });
-          if (!mounted.current) return;
-          if (!validacion || validacion.error) {
-            const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
-            setMessage('No pudimos validar el listado diario. Intenta nuevamente en unos minutos.');
+            const technicalDetail = 'usuarioCre no disponible';
+            const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
+            if (showDevDetail) {
+              setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
+            }
             setApiDebug(`listado-diario:${technicalDetail}`);
-            console.warn('Validación listado diario falló:', technicalDetail);
-            setLoading(false);
-            return;
+            console.warn('Validación listado diario omitida:', technicalDetail);
+            setIdEstadoDiario(null);
+          } else {
+            const validacion = await validarListadoDiario({ usuarioCre });
+            if (!mounted.current) return;
+            if (!validacion || validacion.error) {
+              const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
+              const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
+              if (showDevDetail) {
+                setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
+              }
+              setApiDebug(`listado-diario:${technicalDetail}`);
+              console.warn('Validación listado diario falló:', technicalDetail);
+              setIdEstadoDiario(null);
+            } else {
+              const listadoDiario = Array.isArray(validacion?.data)
+                ? validacion.data
+                : Array.isArray(validacion)
+                  ? validacion
+                  : [];
+              const primerRegistro = listadoDiario[0] || null;
+              const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
+              setIdEstadoDiario(estado);
+            }
           }
-
-          const listadoDiario = Array.isArray(validacion?.data)
-            ? validacion.data
-            : Array.isArray(validacion)
-              ? validacion
-              : [];
-          const primerRegistro = listadoDiario[0] || null;
-          const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
-          setIdEstadoDiario(estado);
 
           const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
           // response logged only when needed

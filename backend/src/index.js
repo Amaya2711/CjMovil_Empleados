@@ -38,11 +38,15 @@ app.use('/api/Reaprobaciones', reaprobacionesRoutes);
 app.use('/api', asistenciaRoutes);
 
 app.get('/', (req, res) => {
-  res.send('API backend funcionando');
+  res.json({ ok: true, message: 'API backend funcionando' });
+});
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ message: 'Ruta API no encontrada' });
 });
 
 console.log('Valor de process.env.PORT:', process.env.PORT);
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor backend escuchando en puerto ${PORT} (0.0.0.0)`);
 });

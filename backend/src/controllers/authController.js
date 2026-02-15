@@ -36,7 +36,7 @@ export const login = async (req, res) => {
     console.error('Error en login:', err);
     if (process.env.DEBUG_API_ERRORS === 'true') {
       return res.status(500).json({
-        message: 'Error interno del servidor.',
+        message: '.Error interno del servidor.',
         detail: err?.message || 'Error no identificado'
       });
     }

@@ -252,7 +252,7 @@ export default function ViewAsistencia() {
             setMessage(constanteOficinas?.message || 'No se pudo obtener ValorFin');
           }
 
-          const usuarioCre = cuadrilla;
+          const usuarioCre = cuadrilla || idusuario || codEmp;
           if (!usuarioCre) {
             setMessage('No se pudo validar el listado diario: cuadrilla no disponible.');
             setLoading(false);
@@ -262,7 +262,10 @@ export default function ViewAsistencia() {
           const validacion = await validarListadoDiario({ usuarioCre });
           if (!mounted.current) return;
           if (!validacion || validacion.error) {
-            setMessage(validacion?.message || 'No se pudo validar el listado diario');
+            const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
+            setMessage('No pudimos validar el listado diario. Intenta nuevamente en unos minutos.');
+            setApiDebug(`listado-diario:${technicalDetail}`);
+            console.warn('Validación listado diario falló:', technicalDetail);
             setLoading(false);
             return;
           }

@@ -51,8 +51,11 @@ export const validarListadoDiario = async ({ usuarioCre } = {}) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ usuarioCre }),
     });
-    if (!res.ok) throw new Error('Error al validar listado diario');
-    return await res.json();
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(payload?.message || payload?.error || 'Error al validar listado diario');
+    }
+    return payload;
   } catch (error) {
     return { error: true, message: error.message };
   }

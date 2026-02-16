@@ -50,33 +50,22 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, ou
     if (pEnvio === 2) {
       request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
       request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
-      if (includeEstadoParams && outOfRangeValue) {
-        request.input('EstadoSalida', sql.Int, 9);
+      if (includeEstadoParams) {
+        request.input('EstadoSalida', sql.Int, outOfRangeValue ? 9 : 0);
       }
     } else {
       request.input('Latitud', sql.Decimal(18, 6), latValue);
       request.input('Longitud', sql.Decimal(18, 6), lonValue);
-      if (includeEstadoParams && outOfRangeValue) {
-        request.input('EstadoMarcacion', sql.Int, 9);
+      if (includeEstadoParams) {
+        request.input('EstadoMarcacion', sql.Int, outOfRangeValue ? 9 : 0);
       }
     }
     return request.execute('sp_Asistencia_Marcar');
   };
 
   console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s outOfRange=%s', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A', outOfRangeValue);
-  try {
-    const result = await executeRegister(true);
-    return result.recordset || result;
-  } catch (error) {
-    const message = String(error?.message || '');
-    const unknownParam = /parameter name|expects parameter|too many arguments|not a parameter for procedure/i.test(message);
-    if (outOfRangeValue && unknownParam) {
-      console.warn('[registerAsistenciaService] SP sin parámetros EstadoMarcacion/EstadoSalida, se ejecuta sin forzar estado=9');
-      const result = await executeRegister(false);
-      return result.recordset || result;
-    }
-    throw error;
-  }
+  const result = await executeRegister(true);
+  return result.recordset || result;
 };
 
 export const cargarListadoDiarioService = async (usuarioCre) => {

@@ -40,8 +40,8 @@ export const registerAsistencia = async (req, res) => {
     const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, outOfRange: !!outOfRange });
     res.json({ success: true, result });
   } catch (error) {
-    console.error('Error al registrar asistencia:', error);
-    res.status(500).json({ message: 'Error al registrar asistencia', error: error.message });
+    console.error('Error al registrar asistencia...:', error);
+    res.status(500).json({ message: 'Error al registrar asistencia..', error: error.message });
   }
 };
 

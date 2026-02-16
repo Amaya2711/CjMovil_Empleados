@@ -40,7 +40,7 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
     const payload = await res.json().catch(() => null);
     console.log('[registerAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
-      throw new Error(payload?.message || 'Error al registrar asistencia');
+      throw new Error(payload?.message || 'Error al registrar asistencia.');
     }
     return payload;
   } catch (error) {

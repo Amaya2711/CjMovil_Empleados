@@ -58,15 +58,7 @@ export default function ViewAsistencia() {
   const formatDate = (val) => {
     if (!val && val !== 0) return '';
     try {
-      let d;
-      if (val instanceof Date) d = val;
-      else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
-      else d = new Date(val);
-      if (isNaN(d.getTime())) return String(val);
-      const dd = String(d.getDate()).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      return `${dd}-${mm}-${yyyy}`;
+        return String(val);
     } catch (e) {
       return String(val);
     }
@@ -75,14 +67,11 @@ export default function ViewAsistencia() {
         const formatDateDayMonth = (val) => {
           if (!val && val !== 0) return '';
           try {
-            let d;
-            if (val instanceof Date) d = val;
-            else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
-            else d = new Date(val);
-            if (isNaN(d.getTime())) return String(val);
-            const dd = String(d.getDate()).padStart(2, '0');
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            return `${dd}-${mm}`;
+            const raw = String(val).trim();
+            const dateOnly = raw.includes('T') ? raw.split('T')[0] : raw.split(' ')[0];
+            const ymd = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (ymd) return `${ymd[3]}-${ymd[2]}`;
+            return raw;
           } catch (e) {
             return String(val);
           }
@@ -109,36 +98,13 @@ export default function ViewAsistencia() {
           }
         };
 
-        const formatTimeLima = (val) => {
+        const formatTimeLima = (val, fechaRef = null) => {
           if (!val && val !== 0) return '';
           try {
             if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(val)) {
               return val.split('.')[0];
             }
-
-            let d;
-            if (val instanceof Date) d = val;
-            else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
-            else d = new Date(val);
-            if (isNaN(d.getTime())) return String(val);
-
-            try {
-              const formatter = new Intl.DateTimeFormat('es-PE', {
-                timeZone: 'America/Lima',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-              });
-              return formatter.format(d);
-            } catch (e) {
-              const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
-              const lima = new Date(utc.getTime() - 5 * 60 * 60000);
-              const hh = String(lima.getHours()).padStart(2, '0');
-              const mm = String(lima.getMinutes()).padStart(2, '0');
-              const ss = String(lima.getSeconds()).padStart(2, '0');
-              return `${hh}:${mm}:${ss}`;
-            }
+            return formatTime(val);
           } catch (e) {
             return String(val);
           }
@@ -441,98 +407,6 @@ export default function ViewAsistencia() {
             console.log('[SALIDA][CLICK] Botón SALIDA presionado');
           }
           try {
-            const source = Array.isArray(data) ? data : [];
-            const currentUserValue = cuadrilla ?? codEmp ?? idusuario ?? null;
-            const currentUserKey = currentUserValue === null || typeof currentUserValue === 'undefined'
-              ? ''
-              : String(currentUserValue).trim();
-            const nowLima = getLimaDate();
-            const todayKey = `${nowLima.getFullYear()}-${String(nowLima.getMonth() + 1).padStart(2, '0')}-${String(nowLima.getDate()).padStart(2, '0')}`;
-            const SENTINEL_HORA_VALUES = new Set([
-              '1900-01-01 00:00:00:000',
-              '1900-01-01 00:00:00.000',
-              '1900-01-01T00:00:00.000',
-              '1900-01-01T00:00:00.000Z',
-            ]);
-            const getLimaDateKey = (val) => {
-              if (!val && val !== 0) return null;
-              try {
-                let d;
-                if (val instanceof Date) d = val;
-                else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
-                else d = new Date(val);
-                if (isNaN(d.getTime())) return null;
-                try {
-                  const limaStr = d.toLocaleString('en-US', { timeZone: 'America/Lima' });
-                  const limaDate = new Date(limaStr);
-                  if (!isNaN(limaDate.getTime())) d = limaDate;
-                } catch (e) {
-                }
-                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-              } catch (e) {
-                return null;
-              }
-            };
-
-            const getUserKey = (item) => {
-              const userValue =
-                item.IdEmpleado ??
-                item.idEmpleado ??
-                item.CodEmp ??
-                item.codEmp ??
-                item.UsuarioAct ??
-                item.usuarioAct ??
-                null;
-              if (userValue === null || typeof userValue === 'undefined') return '';
-              return String(userValue).trim();
-            };
-
-            if (tipo === 'INGRESO') {
-
-              const existeRegistroHoyConHora = source.some(item => {
-                const dateVal = item.FechaAsistencia ?? item.fecha ?? item.Date ?? null;
-                const horaVal = item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? null;
-                const horaTexto = horaVal === null || typeof horaVal === 'undefined' ? '' : String(horaVal).trim();
-                const itemUserKey = getUserKey(item);
-                const sameDay = getLimaDateKey(dateVal) === todayKey;
-                const sameUser = currentUserKey !== '' && itemUserKey !== '' && itemUserKey === currentUserKey;
-                const horaAsignada = horaTexto !== '' && !SENTINEL_HORA_VALUES.has(horaTexto);
-                return sameDay && sameUser && horaAsignada;
-              });
-
-              if (existeRegistroHoyConHora) {
-                setMessage('Ya existe un registro del día para este usuario con Hora asignada. No se puede registrar INGRESO nuevamente.');
-                return;
-              }
-            }
-
-            if (tipo === 'SALIDA') {
-              const existeRegistroHoyConHoraSalida = source.some(item => {
-                const dateVal = item.FechaAsistencia ?? item.fecha ?? item.Date ?? null;
-                const horaSalidaVal =
-                  item.HoraSalida ??
-                  item.horaSalida ??
-                  item.Hora_Salida ??
-                  item.hora_salida ??
-                  item.HoraSalidaMarcacion ??
-                  item.horaSalidaMarcacion ??
-                  item.HoraSalidaRegistro ??
-                  item.horaSalidaRegistro ??
-                  null;
-                const horaSalidaTexto = horaSalidaVal === null || typeof horaSalidaVal === 'undefined' ? '' : String(horaSalidaVal).trim();
-                const itemUserKey = getUserKey(item);
-                const sameDay = getLimaDateKey(dateVal) === todayKey;
-                const sameUser = currentUserKey !== '' && itemUserKey !== '' && itemUserKey === currentUserKey;
-                const horaSalidaAsignada = horaSalidaTexto !== '' && !SENTINEL_HORA_VALUES.has(horaSalidaTexto);
-                return sameDay && sameUser && horaSalidaAsignada;
-              });
-
-              if (existeRegistroHoyConHoraSalida) {
-                setMessage('Ya existe un registro del día para este usuario con Hora de salida asignada. No se puede registrar SALIDA nuevamente.');
-                return;
-              }
-            }
-
             // Verificar permiso y estado de ubicación
             const okPerm = await requestLocationPermission();
             if (!okPerm) {
@@ -694,7 +568,7 @@ export default function ViewAsistencia() {
           try {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const hora = formatTimeLima(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
             const highlighted = isEstadoFueraRango(item);
             return (
@@ -744,8 +618,9 @@ export default function ViewAsistencia() {
 
         const renderFilteredRow = useCallback(({ item }) => {
           try {
-            const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const hora = formatTimeLima(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const fechaRegistro = item.FechaAsistencia ?? item.fecha ?? item.Date ?? '';
+            const fecha = formatDateDayMonth(fechaRegistro);
+            const hora = formatTimeLima(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '', fechaRegistro);
             const horaSalidaRaw =
               item.HoraSalida ??
               item.horaSalida ??
@@ -758,7 +633,7 @@ export default function ViewAsistencia() {
               item.HoraFin ??
               item.horaFin ??
               '';
-            const horaSalida = horaSalidaRaw ? formatTimeLima(horaSalidaRaw) : '--';
+            const horaSalida = horaSalidaRaw ? formatTimeLima(horaSalidaRaw, fechaRegistro) : '--';
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
             const highlighted = isEstadoFueraRango(item);
             return (

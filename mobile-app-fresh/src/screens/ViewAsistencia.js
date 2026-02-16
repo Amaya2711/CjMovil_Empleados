@@ -225,6 +225,23 @@ export default function ViewAsistencia() {
         );
 
         const checkLocationEnabled = async () => {
+          if (Platform.OS === 'web') {
+            try {
+              const permissionsApi = typeof navigator !== 'undefined' ? navigator.permissions : null;
+              if (permissionsApi && permissionsApi.query) {
+                const status = await permissionsApi.query({ name: 'geolocation' });
+                const grantedOrPrompt = status?.state === 'granted' || status?.state === 'prompt';
+                setHasLocation(!!grantedOrPrompt);
+                return !!grantedOrPrompt;
+              }
+              setHasLocation(true);
+              return true;
+            } catch (e) {
+              setHasLocation(true);
+              return true;
+            }
+          }
+
           try {
             const servicesEnabled = await Location.hasServicesEnabledAsync();
             if (!servicesEnabled) {
@@ -339,6 +356,23 @@ export default function ViewAsistencia() {
         }, [currentCoords, valorFin]);
 
         const requestLocationPermission = async () => {
+          if (Platform.OS === 'web') {
+            try {
+              if (typeof navigator === 'undefined' || !navigator.geolocation) {
+                return false;
+              }
+              return await new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                  () => resolve(true),
+                  () => resolve(false),
+                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
+                );
+              });
+            } catch (e) {
+              return false;
+            }
+          }
+
           try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             return status === 'granted';
@@ -363,6 +397,22 @@ export default function ViewAsistencia() {
         };
 
         const getCurrentPosition = async () => {
+          if (Platform.OS === 'web') {
+            if (typeof navigator === 'undefined' || !navigator.geolocation) {
+              throw new Error('Geolocalización no disponible en este navegador.');
+            }
+            return await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(
+                (position) => {
+                  const { latitude, longitude, accuracy } = position.coords || {};
+                  resolve({ latitude, longitude, accuracy });
+                },
+                (error) => reject(error),
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
+              );
+            });
+          }
+
           try {
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest, maximumAge: 1000, timeout: 7000 });
             const { latitude, longitude, accuracy } = loc.coords;

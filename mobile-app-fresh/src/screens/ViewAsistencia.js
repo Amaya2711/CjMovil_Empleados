@@ -441,7 +441,14 @@ export default function ViewAsistencia() {
         };
 
         const executeRegister = async (tipo, coords, warningMessage = '', outOfRange = false) => {
-          const usuarioAct = cuadrilla;
+          const normalizeValue = (value) => {
+            if (value === null || typeof value === 'undefined') return '';
+            return String(value).trim();
+          };
+
+          const idCandidates = [codEmp, cuadrilla, idusuario].map(normalizeValue).filter(Boolean);
+          const numericUserId = idCandidates.find((value) => /^\d+$/.test(value));
+          const usuarioAct = numericUserId || idCandidates[0] || '';
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][PAYLOAD_PREP]', {
               usuarioAct,
@@ -450,8 +457,13 @@ export default function ViewAsistencia() {
               lon: coords?.longitude,
             });
           }
-          if (usuarioAct === null || typeof usuarioAct === 'undefined' || String(usuarioAct).trim() === '') {
-            setMessage('No se pudo registrar asistencia: cuadrilla no disponible.');
+          if (!usuarioAct) {
+            setMessage('No se pudo registrar asistencia: identificador de usuario no disponible.');
+            return;
+          }
+
+          if (!/^\d+$/.test(String(usuarioAct))) {
+            setMessage('No se pudo registrar asistencia: identificador de usuario inválido para marcación.');
             return;
           }
 

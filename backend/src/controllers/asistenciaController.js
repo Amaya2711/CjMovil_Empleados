@@ -41,7 +41,11 @@ export const registerAsistencia = async (req, res) => {
     res.json({ success: true, result });
   } catch (error) {
     console.error('Error al registrar asistencia...:', error);
-    res.status(500).json({ message: 'Error al registrar asistencia..', error: error.message });
+    const errorMessage = String(error?.message || '');
+    if (/UsuarioAct inválido/i.test(errorMessage)) {
+      return res.status(400).json({ message: errorMessage, error: errorMessage });
+    }
+    res.status(500).json({ message: 'Error al registrar asistencia..', error: errorMessage });
   }
 };
 

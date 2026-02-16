@@ -28,10 +28,11 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
 
 export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, outOfRange = false }) => {
   const pool = await getConnection();
-  const usuarioActNumber = Number.parseInt(String(usuarioAct ?? '').trim(), 10);
-  if (!Number.isFinite(usuarioActNumber)) {
+  const usuarioActRaw = String(usuarioAct ?? '').trim();
+  if (!/^\d+$/.test(usuarioActRaw)) {
     throw new Error('UsuarioAct inválido para sp_Asistencia_Marcar');
   }
+  const usuarioActNumber = Number.parseInt(usuarioActRaw, 10);
   const tipoValue = tipo === null || typeof tipo === 'undefined'
     ? ''
     : String(tipo).trim().toUpperCase();

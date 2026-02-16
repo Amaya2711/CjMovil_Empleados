@@ -263,89 +263,95 @@ export default function ViewAsistencia() {
 
         const fetchData = async () => {
           setLoading(true);
-          const idEmpleado = cuadrilla || codEmp || idusuario;
-          const todayLima = getLimaDate();
-          const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
+          try {
+            const idEmpleado = cuadrilla || codEmp || idusuario;
+            const todayLima = getLimaDate();
+            const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
 
-          const constanteOficinas = await getConstanteOficinas();
-          if (!mounted.current) return;
-          if (constanteOficinas && !constanteOficinas.error) {
-            const valorFinResponse =
-              constanteOficinas?.valorFin ??
-              constanteOficinas?.valorFinal ??
-              (Array.isArray(constanteOficinas?.data) && constanteOficinas.data[0]
-                ? (
-                    constanteOficinas.data[0].ValorFin ??
-                    constanteOficinas.data[0].valorFin ??
-                    constanteOficinas.data[0].ValorFinal ??
-                    constanteOficinas.data[0].valorFinal ??
-                    null
-                  )
-                : null);
-            setValorFin(valorFinResponse);
-          } else if (constanteOficinas?.error) {
-            setMessage(constanteOficinas?.message || 'No se pudo obtener ValorFin');
-          }
-
-          const usuarioCre = cuadrilla || idusuario || codEmp;
-          if (!usuarioCre) {
-            const technicalDetail = 'usuarioCre no disponible';
-            const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
-            if (showDevDetail) {
-              setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
-            }
-            setApiDebug(`listado-diario:${technicalDetail}`);
-            console.warn('Validación listado diario omitida:', technicalDetail);
-            setIdEstadoDiario(null);
-          } else {
-            const validacion = await validarListadoDiario({ usuarioCre });
+            const constanteOficinas = await getConstanteOficinas();
             if (!mounted.current) return;
-            if (!validacion || validacion.error) {
-              const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
+            if (constanteOficinas && !constanteOficinas.error) {
+              const valorFinResponse =
+                constanteOficinas?.valorFin ??
+                constanteOficinas?.valorFinal ??
+                (Array.isArray(constanteOficinas?.data) && constanteOficinas.data[0]
+                  ? (
+                      constanteOficinas.data[0].ValorFin ??
+                      constanteOficinas.data[0].valorFin ??
+                      constanteOficinas.data[0].ValorFinal ??
+                      constanteOficinas.data[0].valorFinal ??
+                      null
+                    )
+                  : null);
+              setValorFin(valorFinResponse);
+            } else if (constanteOficinas?.error) {
+              setMessage(constanteOficinas?.message || 'No se pudo obtener ValorFin');
+            }
+
+            const usuarioCre = cuadrilla || idusuario || codEmp;
+            if (!usuarioCre) {
+              const technicalDetail = 'usuarioCre no disponible';
               const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
               if (showDevDetail) {
                 setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
               }
               setApiDebug(`listado-diario:${technicalDetail}`);
-              console.warn('Validación listado diario falló:', technicalDetail);
+              console.warn('Validación listado diario omitida:', technicalDetail);
               setIdEstadoDiario(null);
             } else {
-              const listadoDiario = Array.isArray(validacion?.data)
-                ? validacion.data
-                : Array.isArray(validacion)
-                  ? validacion
-                  : [];
-              const primerRegistro = listadoDiario[0] || null;
-              const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
-              setIdEstadoDiario(estado);
+              const validacion = await validarListadoDiario({ usuarioCre });
+              if (!mounted.current) return;
+              if (!validacion || validacion.error) {
+                const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
+                const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
+                if (showDevDetail) {
+                  setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
+                }
+                setApiDebug(`listado-diario:${technicalDetail}`);
+                console.warn('Validación listado diario falló:', technicalDetail);
+                setIdEstadoDiario(null);
+              } else {
+                const listadoDiario = Array.isArray(validacion?.data)
+                  ? validacion.data
+                  : Array.isArray(validacion)
+                    ? validacion
+                    : [];
+                const primerRegistro = listadoDiario[0] || null;
+                const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
+                setIdEstadoDiario(estado);
+              }
+            }
+
+            const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
+            if (!mounted.current) return;
+            if (!res) {
+              setMessage('Respuesta vacía del servidor');
+              setData([]);
+              setApiDebug('null');
+            } else if (res.error) {
+              setMessage(res.message || 'Error al obtener datos');
+              setData([]);
+              setApiDebug(JSON.stringify(res));
+            } else if (Array.isArray(res)) {
+              setData(res);
+              setApiDebug(`array:${res.length}`);
+            } else if (res.data && Array.isArray(res.data)) {
+              setData(res.data);
+              setApiDebug(`payload.data:${res.data.length}`);
+            } else {
+              setData([]);
+              setApiDebug(JSON.stringify(res));
+              setMessage('Respuesta inesperada del servidor');
+            }
+          } catch (e) {
+            if (mounted.current) {
+              setMessage(e?.message || 'No se pudo cargar asistencia.');
+            }
+          } finally {
+            if (mounted.current) {
+              setLoading(false);
             }
           }
-
-          const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
-          // response logged only when needed
-          if (!mounted.current) return;
-          // Manejo explícito y logging para depuración
-          if (!res) {
-            setMessage('Respuesta vacía del servidor');
-            setData([]);
-            setApiDebug('null');
-          } else if (res.error) {
-            setMessage(res.message || 'Error al obtener datos');
-            setData([]);
-            setApiDebug(JSON.stringify(res));
-          } else if (Array.isArray(res)) {
-            setData(res);
-            setApiDebug(`array:${res.length}`);
-          } else if (res.data && Array.isArray(res.data)) {
-            setData(res.data);
-            setApiDebug(`payload.data:${res.data.length}`);
-          } else {
-            // Respuesta inesperada
-            setData([]);
-            setApiDebug(JSON.stringify(res));
-            setMessage('Respuesta inesperada del servidor');
-          }
-          setLoading(false);
         };
 
         useEffect(() => {
@@ -504,7 +510,7 @@ export default function ViewAsistencia() {
             return String(value).trim();
           };
 
-          const idCandidates = [codEmp, cuadrilla, idusuario].map(normalizeValue).filter(Boolean);
+          const idCandidates = [cuadrilla, codEmp, idusuario].map(normalizeValue).filter(Boolean);
           const numericUserId = idCandidates.find((value) => /^\d+$/.test(value));
           const usuarioAct = numericUserId || idCandidates[0] || '';
           if (tipo === 'SALIDA') {
@@ -533,12 +539,12 @@ export default function ViewAsistencia() {
           }
 
           setLoading(true);
-          const todayLima = getLimaDate();
-          const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
-          const codEmpValue = usuarioAct;
-          const res = await registerAsistencia({ usuarioAct, codEmp: codEmpValue, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia, outOfRange });
-          setLoading(false);
-          if (res && !res.error) {
+          try {
+            const todayLima = getLimaDate();
+            const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
+            const codEmpValue = usuarioAct;
+            const res = await registerAsistencia({ usuarioAct, codEmp: codEmpValue, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia, outOfRange });
+            if (res && !res.error && res.success !== false) {
             setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);
             setActiveTab('RESUMEN');
             setSelectedResumenEstado('__ALL__');
@@ -547,8 +553,12 @@ export default function ViewAsistencia() {
             } catch (e) {
               console.warn('No se pudo refrescar el resumen tras registrar asistencia:', e?.message || e);
             }
-          } else {
-            setMessage(res.message || 'Error al registrar');
+            } else {
+              const backendMessage = res?.message || res?.error || 'Error al registrar';
+              setMessage(backendMessage);
+            }
+          } finally {
+            setLoading(false);
           }
         };
 

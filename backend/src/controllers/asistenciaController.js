@@ -28,10 +28,12 @@ export const registerAsistencia = async (req, res) => {
         sourceIp: req.ip,
       });
     }
-    const usuarioActValue =
-      usuarioAct === null || typeof usuarioAct === 'undefined'
-        ? (codEmp === null || typeof codEmp === 'undefined' ? '' : String(codEmp).trim())
-        : String(usuarioAct).trim();
+    const normalize = (value) => (value === null || typeof value === 'undefined' ? '' : String(value).trim());
+    const usuarioActRaw = normalize(usuarioAct);
+    const codEmpRaw = normalize(codEmp);
+    const usuarioActValue = /^\d+$/.test(usuarioActRaw)
+      ? usuarioActRaw
+      : (/^\d+$/.test(codEmpRaw) ? codEmpRaw : usuarioActRaw || codEmpRaw);
 
     if (!usuarioActValue) {
       return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });

@@ -535,8 +535,8 @@ export default function ViewAsistencia() {
           setLoading(true);
           const todayLima = getLimaDate();
           const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
-          const codEmp = usuarioAct;
-          const res = await registerAsistencia({ usuarioAct, codEmp, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia, outOfRange });
+          const codEmpValue = usuarioAct;
+          const res = await registerAsistencia({ usuarioAct, codEmp: codEmpValue, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia, outOfRange });
           setLoading(false);
           if (res && !res.error) {
             setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);

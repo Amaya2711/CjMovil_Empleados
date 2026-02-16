@@ -28,17 +28,20 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
       body.lat = lat;
       body.lon = lon;
     }
+    console.log('[registerAsistencia][REQUEST]', { url, body });
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const payload = await res.json().catch(() => null);
+    console.log('[registerAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
       throw new Error(payload?.message || 'Error al registrar asistencia');
     }
     return payload;
   } catch (error) {
+    console.error('[registerAsistencia][ERROR]', error?.message || error);
     return { error: true, message: error.message };
   }
 };
@@ -53,7 +56,7 @@ export const validarListadoDiario = async ({ usuarioCre } = {}) => {
     });
     const payload = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(payload?.message || payload?.error || 'Error al validar listado diario');
+      throw new Error(payload?.error || payload?.message || 'Error al validar listado diario');
     }
     return payload;
   } catch (error) {

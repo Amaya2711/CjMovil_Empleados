@@ -1,9 +1,9 @@
 import React, { useContext, useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText } from 'react-native';
-import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, Paragraph, MD3Colors } from 'react-native-paper';
+import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, MD3Colors } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { UserContext } from '../context/UserContext';
-import { eliminarAsistenciaPrueba, getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
+import { getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
 import * as Location from 'expo-location';
 import { useCallback, useMemo } from 'react';
 
@@ -22,9 +22,10 @@ const getLimaDate = () => {
 };
 
 export default function ViewAsistencia() {
-  const SHOW_SALIDA_BUTTON = false;
+  const SHOW_SALIDA_BUTTON = true;
   const MAX_DISTANCE_METERS = 50;
   const MAX_GPS_ACCURACY_METERS = 20;
+  const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicación para registrar INGRESO o SALIDA. Sin ubicación no se grabará la marcación.';
   const { codEmp, idusuario, cuadrilla } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('REGISTRO');
   const [selectedResumenEstado, setSelectedResumenEstado] = useState(null);
@@ -34,20 +35,14 @@ export default function ViewAsistencia() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [apiDebug, setApiDebug] = useState(null);
-  const [dialogVisible, setDialogVisible] = useState(false);
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
-  const [pendingTipo, setPendingTipo] = useState(null);
-  const [pendingCoords, setPendingCoords] = useState(null);
   const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
   const [loadingCompareLocation, setLoadingCompareLocation] = useState(false);
-  const [loadingEliminarPrueba, setLoadingEliminarPrueba] = useState(false);
   const [hasLocation, setHasLocation] = useState(true);
   const [idEstadoDiario, setIdEstadoDiario] = useState(null);
   const [valorFin, setValorFin] = useState(null);
   const [currentCoords, setCurrentCoords] = useState(null);
-  const MIN_ACCURACY = MAX_GPS_ACCURACY_METERS; // metros
   const pageSize = 31; // show up to 31 records in one page by default
-  //const [pendingCoords, setPendingCoords] = useState(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -118,6 +113,7 @@ export default function ViewAsistencia() {
           if (raw === '0') return 'NO LLENADO';
           return raw;
         };
+
 
         const parseReferenceCoords = (referenceValue) => {
           if (!referenceValue && referenceValue !== 0) return null;
@@ -376,66 +372,82 @@ export default function ViewAsistencia() {
         };
 
         const handleRegister = async (tipo) => {
+          if (tipo === 'SALIDA') {
+            console.log('[SALIDA][CLICK] Botón SALIDA presionado');
+          }
           // Verificar permiso y estado de ubicación
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
-            setMessage('Permiso de ubicación no otorgado. Active la ubicación para continuar.');
+            setMessage(LOCATION_REQUIRED_MESSAGE);
             return;
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicación del dispositivo está desactivada. Active la ubicación para continuar.');
+            setMessage(LOCATION_REQUIRED_MESSAGE);
             return;
           }
           try {
             const coords = await getCurrentPosition();
+            if (tipo === 'SALIDA') {
+              console.log('[SALIDA][COORDS]', {
+                latitude: coords?.latitude,
+                longitude: coords?.longitude,
+                accuracy: coords?.accuracy,
+              });
+            }
+            let warningMessage = '';
             if (coords?.accuracy && coords.accuracy > MAX_GPS_ACCURACY_METERS) {
-              setMessage(`Precisión GPS insuficiente. Debe ser ≤ ${MAX_GPS_ACCURACY_METERS} m.`);
-              return;
+              warningMessage = `Precisión GPS insuficiente. Debe ser ≤ ${MAX_GPS_ACCURACY_METERS} m.`;
             }
             const distance = getDistanceToRequiredPoint(coords);
             if (distance !== null && distance > MAX_DISTANCE_METERS) {
-              setMessage('La ubicación no es cercana al punto requerido (máximo 50 metros).');
-              return;
+              warningMessage = warningMessage
+                ? `${warningMessage} La ubicación no es cercana al punto requerido (máximo 50 metros).`
+                : 'La ubicación no es cercana al punto requerido (máximo 50 metros).';
             }
-            setPendingCoords(coords);
-            setPendingTipo(tipo);
-            setDialogVisible(true);
+            await executeRegister(tipo, coords, warningMessage);
           } catch (err) {
-            setMessage('No se puede obtener la ubicación. Active la ubicación del dispositivo.');
+            setMessage(LOCATION_REQUIRED_MESSAGE);
           }
         };
 
-        const confirmRegister = async () => {
-          const tipo = pendingTipo;
-          const coords = pendingCoords;
-          setDialogVisible(false);
-          setPendingTipo(null);
-          setPendingCoords(null);
-
+        const executeRegister = async (tipo, coords, warningMessage = '') => {
           const usuarioAct = cuadrilla;
+          if (tipo === 'SALIDA') {
+            console.log('[SALIDA][PAYLOAD_PREP]', {
+              usuarioAct,
+              tipo,
+              lat: coords?.latitude,
+              lon: coords?.longitude,
+            });
+          }
           if (usuarioAct === null || typeof usuarioAct === 'undefined' || String(usuarioAct).trim() === '') {
             setMessage('No se pudo registrar asistencia: cuadrilla no disponible.');
+            return;
+          }
+
+          const isMobileApp = Platform.OS === 'android' || Platform.OS === 'ios';
+          const hasValidCoords = Number.isFinite(Number(coords?.latitude)) && Number.isFinite(Number(coords?.longitude));
+          if (isMobileApp && !hasValidCoords) {
+            setMessage(LOCATION_REQUIRED_MESSAGE);
             return;
           }
 
           setLoading(true);
           const todayLima = getLimaDate();
           const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
-          const res = await registerAsistencia({ usuarioAct, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia });
+          const codEmp = usuarioAct;
+          const res = await registerAsistencia({ usuarioAct, codEmp, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia });
           setLoading(false);
           if (res && !res.error) {
-            setMessage(`${tipo} registrado correctamente`);
-            fetchData();
+            setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);
+            setActiveTab('RESUMEN');
+            setSelectedResumenEstado('__ALL__');
+            await fetchData();
           } else {
             setMessage(res.message || 'Error al registrar');
           }
-        };
-
-        const cancelDialog = () => {
-          setDialogVisible(false);
-          setPendingTipo(null);
         };
 
         const handleViewCurrentLocation = () => {
@@ -482,23 +494,6 @@ export default function ViewAsistencia() {
           }
         };
 
-        const handleEliminarPrueba = async () => {
-          try {
-            setLoadingEliminarPrueba(true);
-            const res = await eliminarAsistenciaPrueba();
-            if (res && !res.error) {
-              setMessage(res.message || 'Proceso ejecutado correctamente.');
-              await fetchData();
-            } else {
-              setMessage(res?.message || 'No se pudo ejecutar la eliminación de prueba.');
-            }
-          } catch (e) {
-            setMessage('Error al ejecutar eliminación de prueba.');
-          } finally {
-            setLoadingEliminarPrueba(false);
-          }
-        };
-
         const closeLocationDialog = () => {
           setLocationDialogVisible(false);
         };
@@ -538,15 +533,14 @@ export default function ViewAsistencia() {
           try {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '');
             const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
-            const estadoMarcacion = item.EstadoMarcacion ?? item.estadoMarcacion ?? '';
+            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
             return (
               <View>
                 <View style={[styles.row, { backgroundColor: '#fff', minHeight: 20 }]}> 
+                  <Text style={[styles.cell, styles.cellEstado, { color: '#000' }]}>{estado}</Text>
                   <Text style={[styles.cell, styles.cellFecha, { color: '#000' }]}>{fecha}</Text>
                   <Text style={[styles.cell, styles.cellHora, { color: '#000' }]}>{hora}</Text>
-                  <Text style={[styles.cell, styles.cellEstado, { color: '#000' }]}>{estado}</Text>
                   <View style={[styles.cell, styles.cellAccion]}> 
                     <IconButton
                       icon="magnify"
@@ -578,9 +572,9 @@ export default function ViewAsistencia() {
 
         const renderListHeader = useCallback(() => (
           <View style={styles.headerRow}>
+            <Text style={[styles.headerCell, styles.cellEstado]}>Estado</Text>
             <Text style={[styles.headerCell, styles.cellFecha]}>Fecha</Text>
             <Text style={[styles.headerCell, styles.cellHora]}>Hora</Text>
-            <Text style={[styles.headerCell, styles.cellEstado]}>Estado</Text>
             <Text style={[styles.headerCell, styles.cellAccion]}></Text>
           </View>
         ), []);
@@ -589,10 +583,15 @@ export default function ViewAsistencia() {
 
         const totalRecords = useMemo(() => (Array.isArray(data) ? data.slice(0, pageSize) : []), [data]);
         const visibleData = totalRecords;
+        const getResumenEstado = useCallback((item = {}) => {
+          const estadoRaw = item.Estado ?? item.estado ?? '';
+          const estadoTexto = String(estadoRaw ?? '').trim();
+          return estadoTexto ? estadoTexto.toUpperCase() : 'SIN ESTADO';
+        }, []);
         const resumenData = useMemo(() => {
           const source = Array.isArray(data) ? data : [];
           const conteoPorEstado = source.reduce((acc, item) => {
-            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '');
+            const estado = getResumenEstado(item);
             acc[estado] = (acc[estado] || 0) + 1;
             return acc;
           }, {});
@@ -600,7 +599,7 @@ export default function ViewAsistencia() {
             total: source.length,
             estados: Object.entries(conteoPorEstado),
           };
-        }, [data]);
+        }, [data, getResumenEstado]);
         const maxResumenEstado = useMemo(() => {
           return resumenData.estados.reduce((max, [, cantidad]) => {
             const value = Number(cantidad) || 0;
@@ -612,10 +611,10 @@ export default function ViewAsistencia() {
           if (!selectedResumenEstado) return [];
           if (selectedResumenEstado === '__ALL__') return source;
           return source.filter(item => {
-            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? item.EstadoMarcacion ?? item.estadoMarcacion ?? item.IdEstado ?? item.idEstado ?? '');
+            const estado = getResumenEstado(item);
             return estado === selectedResumenEstado;
           });
-        }, [data, selectedResumenEstado]);
+        }, [data, selectedResumenEstado, getResumenEstado]);
         const hasRegistroHoy = useMemo(() => {
           const source = Array.isArray(data) ? data : [];
           const nowLima = getLimaDate();
@@ -717,23 +716,11 @@ export default function ViewAsistencia() {
                       INGRESO
                     </Button>
                     {SHOW_SALIDA_BUTTON && (
-                      <Button mode="contained" onPress={() => handleRegister('SALIDA')} style={styles.actionButton} loading={loading} disabled={loading || !hasLocation}>
+                      <Button mode="contained" buttonColor="#FA8072" onPress={() => handleRegister('SALIDA')} style={styles.actionButton} loading={loading} disabled={loading}>
                         SALIDA
                       </Button>
                     )}
                   </View>
-                  <Text style={styles.valorFinText}>
-                    ValorFin: {valorFin === null || typeof valorFin === 'undefined' || String(valorFin).trim() === '' ? 'N/D' : String(valorFin)}
-                  </Text>
-                  <Text style={styles.coordsText}>
-                    Latitud: {currentCoords?.latitude ? currentCoords.latitude.toFixed(6) : 'N/D'}
-                  </Text>
-                  <Text style={styles.coordsText}>
-                    Longitud: {currentCoords?.longitude ? currentCoords.longitude.toFixed(6) : 'N/D'}
-                  </Text>
-                  <Text style={styles.coordsText}>
-                    Precisión: {currentCoords?.accuracy ? `${currentCoords.accuracy} m` : 'N/D'}
-                  </Text>
                   <Button
                     mode="outlined"
                     onPress={handleCompareLocations}
@@ -742,15 +729,6 @@ export default function ViewAsistencia() {
                     disabled={loadingCompareLocation || !hasLocation}
                   >
                     COMPARAR UBICACIONES
-                  </Button>
-                  <Button
-                    mode="outlined"
-                    onPress={handleEliminarPrueba}
-                    style={styles.deleteTestButton}
-                    loading={loadingEliminarPrueba}
-                    disabled={loadingEliminarPrueba}
-                  >
-                    EJECUTAR ELIMINAR PRUEBA
                   </Button>
                   <Button
                     mode="outlined"
@@ -765,29 +743,6 @@ export default function ViewAsistencia() {
               )}
 
             <Portal>
-              <Dialog visible={dialogVisible} onDismiss={cancelDialog}>
-                <Dialog.Title>Confirmar</Dialog.Title>
-                <Dialog.Content>
-                  <Paragraph>¿Desea registrar "{pendingTipo}" en asistencia?</Paragraph>
-                  {pendingCoords && (
-                    <View style={{ marginTop: 8 }}>
-                      <Text>Lat: {pendingCoords.latitude?.toFixed(6)}</Text>
-                      <Text>Lon: {pendingCoords.longitude?.toFixed(6)}</Text>
-                      <Text>Precisión: {pendingCoords.accuracy ? `${pendingCoords.accuracy} m` : 'N/A'}</Text>
-                      {pendingCoords.accuracy && pendingCoords.accuracy > MIN_ACCURACY && (
-                        <Text style={{ color: '#a00', marginTop: 6 }}>Precisión insuficiente. Necesaria ≤ {MIN_ACCURACY} m</Text>
-                      )}
-                    </View>
-                  )}
-                </Dialog.Content>
-                <Dialog.Actions>
-                  <Button onPress={cancelDialog}>Cancelar</Button>
-                  <Button onPress={confirmRegister} disabled={pendingCoords && pendingCoords.accuracy && pendingCoords.accuracy > MIN_ACCURACY}>
-                    Confirmar
-                  </Button>
-                </Dialog.Actions>
-              </Dialog>
-
               <Dialog visible={locationDialogVisible} onDismiss={closeLocationDialog}>
                 <Dialog.Title>Abrir ubicación actual</Dialog.Title>
                 <Dialog.Content>
@@ -913,6 +868,8 @@ export default function ViewAsistencia() {
         cell: { paddingHorizontal: 8, flexShrink: 0, fontSize: 12 },
         cellFecha: { minWidth: 58 },
         cellEstado: { minWidth: 96 },
+        cellIdEstado: { minWidth: 82 },
+        cellEstadoMarcacion: { minWidth: 140 },
         cellHora: { minWidth: 82 },
         cellAccion: { width: 56, alignItems: 'center' },
         headerRow: { flexDirection: 'row', paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#ddd' },

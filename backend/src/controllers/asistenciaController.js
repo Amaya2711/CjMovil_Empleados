@@ -16,7 +16,18 @@ export const getAsistencia = async (req, res) => {
 
 export const registerAsistencia = async (req, res) => {
   try {
-    const { usuarioAct, codEmp } = req.body || {};
+    const { usuarioAct, codEmp, tipo, lat, lon } = req.body || {};
+    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon });
+    if (String(tipo || '').toUpperCase() === 'SALIDA') {
+      console.log('[SALIDA][BODY]', {
+        usuarioAct,
+        codEmp,
+        tipo,
+        lat,
+        lon,
+        sourceIp: req.ip,
+      });
+    }
     const usuarioActValue =
       usuarioAct === null || typeof usuarioAct === 'undefined'
         ? (codEmp === null || typeof codEmp === 'undefined' ? '' : String(codEmp).trim())
@@ -26,7 +37,7 @@ export const registerAsistencia = async (req, res) => {
       return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });
     }
 
-    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue });
+    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon });
     res.json({ success: true, result });
   } catch (error) {
     console.error('Error al registrar asistencia:', error);
@@ -45,6 +56,16 @@ export const cargarListadoDiario = async (req, res) => {
     const rows = await cargarListadoDiarioService(usuarioCreRaw);
     res.json({ success: true, data: rows });
   } catch (error) {
+    const errorMessage = String(error?.message || '');
+    const missingStoredProcedure = /Could not find stored procedure\s+'sp_CargarListadoDiario'/i.test(errorMessage);
+    if (missingStoredProcedure) {
+      console.warn('SP sp_CargarListadoDiario no existe en la base de datos configurada. Se devuelve listado vacío.');
+      return res.json({
+        success: true,
+        data: [],
+        warning: 'SP sp_CargarListadoDiario no encontrado'
+      });
+    }
     console.error('Error al validar listado diario:', error);
     res.status(500).json({ message: 'Error al validar listado diario', error: error.message });
   }

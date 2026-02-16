@@ -26,14 +26,33 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
   }));
 };
 
-export const registerAsistenciaService = async ({ usuarioAct }) => {
+export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon }) => {
   const pool = await getConnection();
   const request = pool.request();
-  const usuarioActValue = usuarioAct === null || typeof usuarioAct === 'undefined'
+  const usuarioActNumber = Number.parseInt(String(usuarioAct ?? '').trim(), 10);
+  if (!Number.isFinite(usuarioActNumber)) {
+    throw new Error('UsuarioAct inválido para sp_Asistencia_Marcar');
+  }
+  const tipoValue = tipo === null || typeof tipo === 'undefined'
     ? ''
-    : String(usuarioAct).trim();
-  request.input('UsuarioAct', sql.VarChar(50), usuarioActValue);
-  const result = await request.execute('sp_Asistencia_ActualizarEstado');
+    : String(tipo).trim().toUpperCase();
+  const pEnvio = tipoValue === 'SALIDA' ? 2 : 1;
+  const latNumber = (lat === null || typeof lat === 'undefined' || String(lat).trim() === '') ? null : Number(lat);
+  const lonNumber = (lon === null || typeof lon === 'undefined' || String(lon).trim() === '') ? null : Number(lon);
+  const latValue = Number.isFinite(latNumber) ? latNumber : null;
+  const lonValue = Number.isFinite(lonNumber) ? lonNumber : null;
+
+  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A');
+  request.input('UsuarioAct', sql.Int, usuarioActNumber);
+  request.input('pEnvio', sql.Int, pEnvio);
+  if (pEnvio === 2) {
+    request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
+    request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
+  } else {
+    request.input('Latitud', sql.Decimal(18, 6), latValue);
+    request.input('Longitud', sql.Decimal(18, 6), lonValue);
+  }
+  const result = await request.execute('sp_Asistencia_Marcar');
   return result.recordset || result;
 };
 

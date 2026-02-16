@@ -80,10 +80,15 @@ export default function ViewAsistencia() {
         const formatTime = (val) => {
           if (!val && val !== 0) return '';
           try {
-            // If already in HH:mm:ss or HH:mm:ss.SSS format, return HH:mm:ss
-            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(val)) {
-              return val.split('.')[0];
+            if (typeof val === 'string') {
+              const raw = String(val).trim();
+              const hhmmss = raw.match(/^(\d{2}:\d{2}:\d{2})(?:\.\d+)?$/);
+              if (hhmmss) return hhmmss[1];
+
+              const dateTimeWithTime = raw.match(/(?:T|\s)(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i);
+              if (dateTimeWithTime) return dateTimeWithTime[1];
             }
+
             let d;
             if (val instanceof Date) d = val;
             else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
@@ -93,18 +98,6 @@ export default function ViewAsistencia() {
             const mm = String(d.getMinutes()).padStart(2, '0');
             const ss = String(d.getSeconds()).padStart(2, '0');
             return `${hh}:${mm}:${ss}`;
-          } catch (e) {
-            return String(val);
-          }
-        };
-
-        const formatTimeLima = (val, fechaRef = null) => {
-          if (!val && val !== 0) return '';
-          try {
-            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(val)) {
-              return val.split('.')[0];
-            }
-            return formatTime(val);
           } catch (e) {
             return String(val);
           }
@@ -568,7 +561,7 @@ export default function ViewAsistencia() {
           try {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const hora = formatTimeLima(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
             const highlighted = isEstadoFueraRango(item);
             return (
@@ -620,7 +613,7 @@ export default function ViewAsistencia() {
           try {
             const fechaRegistro = item.FechaAsistencia ?? item.fecha ?? item.Date ?? '';
             const fecha = formatDateDayMonth(fechaRegistro);
-            const hora = formatTimeLima(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '', fechaRegistro);
+            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const horaSalidaRaw =
               item.HoraSalida ??
               item.horaSalida ??
@@ -633,7 +626,7 @@ export default function ViewAsistencia() {
               item.HoraFin ??
               item.horaFin ??
               '';
-            const horaSalida = horaSalidaRaw ? formatTimeLima(horaSalidaRaw, fechaRegistro) : '--';
+            const horaSalida = horaSalidaRaw ? formatTime(horaSalidaRaw) : '--';
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
             const highlighted = isEstadoFueraRango(item);
             return (

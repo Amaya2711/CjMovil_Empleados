@@ -12,20 +12,52 @@ export default function MainMenuScreen({ navigation }) {
 
   const openLocationSettings = async () => {
     if (Platform.OS === 'android') {
-      try {
-        await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
-        return;
-      } catch (e) {
-        const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
-        try {
-          await Linking.openURL(intentUrl);
-          return;
-        } catch (err) {
-          // fallback a settings de app
-        }
-      }
+      Alert.alert(
+        'Activar ubicación',
+        'Elija una opción para activar la ubicación en su móvil.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Ubicación del dispositivo',
+            onPress: async () => {
+              try {
+                await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+                return;
+              } catch (e) {
+                const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
+                try {
+                  await Linking.openURL(intentUrl);
+                  return;
+                } catch (err) {
+                  await Linking.openSettings();
+                }
+              }
+            }
+          },
+          {
+            text: 'Permisos de la app',
+            onPress: async () => {
+              await Linking.openSettings();
+            }
+          },
+        ]
+      );
+      return;
     }
-    await Linking.openSettings();
+
+    Alert.alert(
+      'Activar ubicación',
+      'Se abrirá Configuración para habilitar Ubicación de esta app en iOS.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Abrir configuración',
+          onPress: async () => {
+            await Linking.openSettings();
+          }
+        },
+      ]
+    );
   };
 
   const handleAsistenciaPress = async () => {
@@ -36,7 +68,7 @@ export default function MainMenuScreen({ navigation }) {
       if (!servicesEnabled) {
         Alert.alert(
           'Ubicación desactivada',
-          'Para ingresar a Asistencia debe activar la ubicación del dispositivo.',
+          'No tienes la opción de UBICACIÓN activa. Actívala para ingresar a Asistencia.',
           [
             { text: 'Cancelar', style: 'cancel' },
             { text: 'Abrir configuración', onPress: () => openLocationSettings() },

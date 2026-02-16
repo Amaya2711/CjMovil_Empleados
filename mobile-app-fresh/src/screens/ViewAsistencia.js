@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText } from 'react-native';
+import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText, Alert } from 'react-native';
 import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, MD3Colors } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { UserContext } from '../context/UserContext';
@@ -25,6 +25,7 @@ export default function ViewAsistencia() {
   const SHOW_SALIDA_BUTTON = true;
   const MAX_DISTANCE_METERS = 50;
   const MAX_GPS_ACCURACY_METERS = 20;
+  const LOCATION_DISABLED_MESSAGE = 'No tienes la opción de UBICACIÓN activa. Actívala para continuar.';
   const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicación para registrar INGRESO o SALIDA. Sin ubicación no se grabará la marcación.';
   const { codEmp, idusuario, cuadrilla } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('REGISTRO');
@@ -411,22 +412,52 @@ export default function ViewAsistencia() {
           }
 
           if (Platform.OS === 'android') {
-            try {
-              await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
-              return;
-            } catch (e) {
-              const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
-              try {
-                await Linking.openURL(intentUrl);
-                return;
-              } catch (err) {
-                await Linking.openSettings();
-              }
-            }
+            Alert.alert(
+              'Activar ubicación',
+              'Elija una opción para activar la ubicación en su móvil.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Ubicación del dispositivo',
+                  onPress: async () => {
+                    try {
+                      await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+                      return;
+                    } catch (e) {
+                      const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
+                      try {
+                        await Linking.openURL(intentUrl);
+                        return;
+                      } catch (err) {
+                        await Linking.openSettings();
+                      }
+                    }
+                  }
+                },
+                {
+                  text: 'Permisos de la app',
+                  onPress: async () => {
+                    await Linking.openSettings();
+                  }
+                },
+              ]
+            );
             return;
           }
-          // iOS fallback
-          Linking.openSettings();
+
+          Alert.alert(
+            'Activar ubicación',
+            'Se abrirá Configuración para habilitar Ubicación de esta app en iOS.',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Abrir configuración',
+                onPress: async () => {
+                  await Linking.openSettings();
+                }
+              },
+            ]
+          );
         };
 
         const getCurrentPosition = async () => {
@@ -492,7 +523,7 @@ export default function ViewAsistencia() {
             }
             const enabled = await checkLocationEnabled();
             if (!enabled) {
-              setMessage(LOCATION_REQUIRED_MESSAGE);
+              setMessage(LOCATION_DISABLED_MESSAGE);
               return;
             }
             const coords = await getCurrentPosition();
@@ -520,7 +551,7 @@ export default function ViewAsistencia() {
             if (errorCode === 1) {
               setMessage('Permiso de ubicación denegado. Habilítelo en el navegador para continuar.');
             } else if (errorCode === 2) {
-              setMessage('No se pudo obtener la ubicación actual del dispositivo. Inténtelo nuevamente.');
+              setMessage(LOCATION_DISABLED_MESSAGE);
             } else if (errorCode === 3) {
               setMessage('La obtención de ubicación excedió el tiempo de espera. Inténtelo nuevamente.');
             } else {
@@ -607,7 +638,7 @@ export default function ViewAsistencia() {
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicación del dispositivo está desactivada. Active la ubicación para continuar.');
+            setMessage(LOCATION_DISABLED_MESSAGE);
             return;
           }
           try {
@@ -651,7 +682,7 @@ export default function ViewAsistencia() {
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicación del dispositivo está desactivada. Active la ubicación para continuar.');
+            setMessage(LOCATION_DISABLED_MESSAGE);
             return;
           }
           try {
@@ -929,7 +960,7 @@ export default function ViewAsistencia() {
                 <Card style={{ marginBottom: 12, padding: 10, backgroundColor: '#fff3f3' }}>
                   <Card.Content>
                     <Text style={{ color: '#a00', fontWeight: '700' }}>Ubicación desactivada</Text>
-                    <Text>Active la ubicación o permisos para registrar INGRESO/SALIDA.</Text>
+                    <Text>No tienes la opción de UBICACIÓN activa. Actívala para registrar INGRESO/SALIDA.</Text>
                     <View style={{ marginTop: 8 }}>
                         <Button mode="outlined" onPress={() => openLocationSettings()}>
                           Abrir configuración

@@ -10,9 +10,18 @@ export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
     const params = new URLSearchParams();
     if (codEmp) params.append('codEmp', codEmp);
     if (fechaAsistencia) params.append('fechaAsistencia', fechaAsistencia);
+    params.append('_ts', String(Date.now()));
     const query = params.toString();
     if (query) url += `?${query}`;
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
+    });
     if (!res.ok) throw new Error('Error al obtener asistencia');
     return await res.json();
   } catch (error) {

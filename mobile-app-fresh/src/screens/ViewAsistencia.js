@@ -576,6 +576,10 @@ export default function ViewAsistencia() {
             } catch (e) {
               console.warn('No se pudo refrescar el resumen tras registrar asistencia:', e?.message || e);
             }
+            setTimeout(() => {
+              if (!mounted.current) return;
+              fetchData();
+            }, 1200);
             } else {
               const backendMessage = res?.message || res?.error || 'Error al registrar';
               setMessage(backendMessage);

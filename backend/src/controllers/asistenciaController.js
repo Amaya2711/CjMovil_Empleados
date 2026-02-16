@@ -16,8 +16,8 @@ export const getAsistencia = async (req, res) => {
 
 export const registerAsistencia = async (req, res) => {
   try {
-    const { usuarioAct, codEmp, tipo, lat, lon } = req.body || {};
-    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon });
+    const { usuarioAct, codEmp, tipo, lat, lon, outOfRange } = req.body || {};
+    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, outOfRange });
     if (String(tipo || '').toUpperCase() === 'SALIDA') {
       console.log('[SALIDA][BODY]', {
         usuarioAct,
@@ -37,7 +37,7 @@ export const registerAsistencia = async (req, res) => {
       return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });
     }
 
-    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon });
+    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, outOfRange: !!outOfRange });
     res.json({ success: true, result });
   } catch (error) {
     console.error('Error al registrar asistencia:', error);

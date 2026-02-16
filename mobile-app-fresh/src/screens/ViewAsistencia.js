@@ -34,6 +34,8 @@ export default function ViewAsistencia() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [registeringTipo, setRegisteringTipo] = useState(null);
+  const [pressedTipo, setPressedTipo] = useState(null);
   const [apiDebug, setApiDebug] = useState(null);
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
   const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
@@ -372,22 +374,116 @@ export default function ViewAsistencia() {
         };
 
         const handleRegister = async (tipo) => {
+          if (registeringTipo || loading) return;
+          setRegisteringTipo(tipo);
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][CLICK] Botón SALIDA presionado');
           }
-          // Verificar permiso y estado de ubicación
-          const okPerm = await requestLocationPermission();
-          if (!okPerm) {
-            setHasLocation(false);
-            setMessage(LOCATION_REQUIRED_MESSAGE);
-            return;
-          }
-          const enabled = await checkLocationEnabled();
-          if (!enabled) {
-            setMessage(LOCATION_REQUIRED_MESSAGE);
-            return;
-          }
           try {
+            const source = Array.isArray(data) ? data : [];
+            const currentUserValue = cuadrilla ?? codEmp ?? idusuario ?? null;
+            const currentUserKey = currentUserValue === null || typeof currentUserValue === 'undefined'
+              ? ''
+              : String(currentUserValue).trim();
+            const nowLima = getLimaDate();
+            const todayKey = `${nowLima.getFullYear()}-${String(nowLima.getMonth() + 1).padStart(2, '0')}-${String(nowLima.getDate()).padStart(2, '0')}`;
+            const SENTINEL_HORA_VALUES = new Set([
+              '1900-01-01 00:00:00:000',
+              '1900-01-01 00:00:00.000',
+              '1900-01-01T00:00:00.000',
+              '1900-01-01T00:00:00.000Z',
+            ]);
+            const getLimaDateKey = (val) => {
+              if (!val && val !== 0) return null;
+              try {
+                let d;
+                if (val instanceof Date) d = val;
+                else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
+                else d = new Date(val);
+                if (isNaN(d.getTime())) return null;
+                try {
+                  const limaStr = d.toLocaleString('en-US', { timeZone: 'America/Lima' });
+                  const limaDate = new Date(limaStr);
+                  if (!isNaN(limaDate.getTime())) d = limaDate;
+                } catch (e) {
+                }
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              } catch (e) {
+                return null;
+              }
+            };
+
+            const getUserKey = (item) => {
+              const userValue =
+                item.IdEmpleado ??
+                item.idEmpleado ??
+                item.CodEmp ??
+                item.codEmp ??
+                item.UsuarioAct ??
+                item.usuarioAct ??
+                null;
+              if (userValue === null || typeof userValue === 'undefined') return '';
+              return String(userValue).trim();
+            };
+
+            if (tipo === 'INGRESO') {
+
+              const existeRegistroHoyConHora = source.some(item => {
+                const dateVal = item.FechaAsistencia ?? item.fecha ?? item.Date ?? null;
+                const horaVal = item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? null;
+                const horaTexto = horaVal === null || typeof horaVal === 'undefined' ? '' : String(horaVal).trim();
+                const itemUserKey = getUserKey(item);
+                const sameDay = getLimaDateKey(dateVal) === todayKey;
+                const sameUser = currentUserKey !== '' && itemUserKey !== '' && itemUserKey === currentUserKey;
+                const horaAsignada = horaTexto !== '' && !SENTINEL_HORA_VALUES.has(horaTexto);
+                return sameDay && sameUser && horaAsignada;
+              });
+
+              if (existeRegistroHoyConHora) {
+                setMessage('Ya existe un registro del día para este usuario con Hora asignada. No se puede registrar INGRESO nuevamente.');
+                return;
+              }
+            }
+
+            if (tipo === 'SALIDA') {
+              const existeRegistroHoyConHoraSalida = source.some(item => {
+                const dateVal = item.FechaAsistencia ?? item.fecha ?? item.Date ?? null;
+                const horaSalidaVal =
+                  item.HoraSalida ??
+                  item.horaSalida ??
+                  item.Hora_Salida ??
+                  item.hora_salida ??
+                  item.HoraSalidaMarcacion ??
+                  item.horaSalidaMarcacion ??
+                  item.HoraSalidaRegistro ??
+                  item.horaSalidaRegistro ??
+                  null;
+                const horaSalidaTexto = horaSalidaVal === null || typeof horaSalidaVal === 'undefined' ? '' : String(horaSalidaVal).trim();
+                const itemUserKey = getUserKey(item);
+                const sameDay = getLimaDateKey(dateVal) === todayKey;
+                const sameUser = currentUserKey !== '' && itemUserKey !== '' && itemUserKey === currentUserKey;
+                const horaSalidaAsignada = horaSalidaTexto !== '' && !SENTINEL_HORA_VALUES.has(horaSalidaTexto);
+                return sameDay && sameUser && horaSalidaAsignada;
+              });
+
+              if (existeRegistroHoyConHoraSalida) {
+                setMessage('Ya existe un registro del día para este usuario con Hora de salida asignada. No se puede registrar SALIDA nuevamente.');
+                return;
+              }
+            }
+
+            // Verificar permiso y estado de ubicación
+            const okPerm = await requestLocationPermission();
+            if (!okPerm) {
+              setHasLocation(false);
+              setMessage(LOCATION_REQUIRED_MESSAGE);
+              return;
+            }
+            const enabled = await checkLocationEnabled();
+            if (!enabled) {
+              setMessage(LOCATION_REQUIRED_MESSAGE);
+              return;
+            }
             const coords = await getCurrentPosition();
             if (tipo === 'SALIDA') {
               console.log('[SALIDA][COORDS]', {
@@ -406,13 +502,17 @@ export default function ViewAsistencia() {
                 ? `${warningMessage} La ubicación no es cercana al punto requerido (máximo 50 metros).`
                 : 'La ubicación no es cercana al punto requerido (máximo 50 metros).';
             }
-            await executeRegister(tipo, coords, warningMessage);
+            const outOfRange = distance !== null && distance > MAX_DISTANCE_METERS;
+            await executeRegister(tipo, coords, warningMessage, outOfRange);
           } catch (err) {
             setMessage(LOCATION_REQUIRED_MESSAGE);
+          } finally {
+            setRegisteringTipo(null);
+            setPressedTipo(null);
           }
         };
 
-        const executeRegister = async (tipo, coords, warningMessage = '') => {
+        const executeRegister = async (tipo, coords, warningMessage = '', outOfRange = false) => {
           const usuarioAct = cuadrilla;
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][PAYLOAD_PREP]', {
@@ -438,7 +538,7 @@ export default function ViewAsistencia() {
           const todayLima = getLimaDate();
           const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
           const codEmp = usuarioAct;
-          const res = await registerAsistencia({ usuarioAct, codEmp, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia });
+          const res = await registerAsistencia({ usuarioAct, codEmp, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia, outOfRange });
           setLoading(false);
           if (res && !res.error) {
             setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);
@@ -541,10 +641,11 @@ export default function ViewAsistencia() {
                   <Text style={[styles.cell, styles.cellEstado, { color: '#000' }]}>{estado}</Text>
                   <Text style={[styles.cell, styles.cellFecha, { color: '#000' }]}>{fecha}</Text>
                   <Text style={[styles.cell, styles.cellHora, { color: '#000' }]}>{hora}</Text>
-                  <View style={[styles.cell, styles.cellAccion]}> 
+                  <View style={[styles.cell, styles.cellAccionTight]}>
                     <IconButton
                       icon="magnify"
-                      size={20}
+                      size={16}
+                      style={styles.iconButtonCompact}
                       onPress={async () => {
                         const lat = item.Latitud ?? item.lat ?? item.latitude ?? item.Lat ?? null;
                         const lon = item.Longitud ?? item.lon ?? item.longitude ?? item.Long ?? null;
@@ -576,6 +677,93 @@ export default function ViewAsistencia() {
             <Text style={[styles.headerCell, styles.cellFecha]}>Fecha</Text>
             <Text style={[styles.headerCell, styles.cellHora]}>Hora</Text>
             <Text style={[styles.headerCell, styles.cellAccion]}></Text>
+          </View>
+        ), []);
+
+        const renderFilteredRow = useCallback(({ item }) => {
+          try {
+            const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
+            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const horaSalidaRaw =
+              item.HoraSalida ??
+              item.horaSalida ??
+              item.Hora_Salida ??
+              item.hora_salida ??
+              item.HoraSalidaMarcacion ??
+              item.horaSalidaMarcacion ??
+              item.HoraSalidaRegistro ??
+              item.horaSalidaRegistro ??
+              item.HoraFin ??
+              item.horaFin ??
+              '';
+            const horaSalida = horaSalidaRaw ? formatTime(horaSalidaRaw) : '--';
+            const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
+            return (
+              <View>
+                <View style={[styles.row, { backgroundColor: '#fff', minHeight: 20 }]}> 
+                  <Text style={[styles.cell, styles.cellFecha, { color: '#000' }]}>{fecha}</Text>
+                  <Text style={[styles.cell, styles.cellHora, { color: '#000' }]}>{hora}</Text>
+                  <View style={[styles.cell, styles.cellAccion]}>
+                    <IconButton
+                      icon="magnify"
+                      size={16}
+                      style={styles.iconButtonCompact}
+                      onPress={async () => {
+                        const latEntrada = item.Latitud ?? item.latitud ?? item.latitude ?? item.Lat ?? null;
+                        const lonEntrada = item.Longitud ?? item.longitud ?? item.longitude ?? item.Long ?? null;
+                        if (!latEntrada || !lonEntrada) {
+                          setMessage('Coordenadas de entrada no encontradas');
+                          return;
+                        }
+                        const url = `https://www.google.com/maps/search/?api=1&query=${latEntrada},${lonEntrada}`;
+                        try {
+                          await Linking.openURL(url);
+                        } catch (e) {
+                          setMessage('No se pudo abrir el mapa');
+                        }
+                      }}
+                    />
+                  </View>
+                  <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{horaSalida}</Text>
+                  <View style={[styles.cell, styles.cellAccion]}>
+                    <IconButton
+                      icon="magnify"
+                      size={16}
+                      style={styles.iconButtonCompact}
+                      onPress={async () => {
+                        const latSalida = item.LatitudSalida ?? item.latitudSalida ?? item.latitudsalida ?? item.Latitud_Salida ?? null;
+                        const lonSalida = item.LongitudSalida ?? item.longitudSalida ?? item.longitudsalida ?? item.Longitud_Salida ?? null;
+                        if (!latSalida || !lonSalida) {
+                          setMessage('Coordenadas de salida no encontradas');
+                          return;
+                        }
+                        const url = `https://www.google.com/maps/search/?api=1&query=${latSalida},${lonSalida}`;
+                        try {
+                          await Linking.openURL(url);
+                        } catch (e) {
+                          setMessage('No se pudo abrir el mapa');
+                        }
+                      }}
+                    />
+                  </View>
+                  <Text style={[styles.cell, styles.cellEstado, { color: '#000' }]}>{estado}</Text>
+                </View>
+              </View>
+            );
+          } catch (err) {
+            console.error('renderFilteredRow error:', err);
+            return null;
+          }
+        }, [setMessage]);
+
+        const renderFilteredListHeader = useCallback(() => (
+          <View style={styles.headerRow}>
+            <Text style={[styles.headerCell, styles.cellFecha]}>Fecha</Text>
+            <Text style={[styles.headerCell, styles.cellHora]}>Hora</Text>
+            <Text style={[styles.headerCell, styles.cellAccion]}></Text>
+            <Text style={[styles.headerCell, styles.cellHoraSalida]}>Salida</Text>
+            <Text style={[styles.headerCell, styles.cellAccion]}></Text>
+            <Text style={[styles.headerCell, styles.cellEstado]}>Estado</Text>
           </View>
         ), []);
 
@@ -712,11 +900,29 @@ export default function ViewAsistencia() {
                     </Card.Content>
                   </Card>
                   <View style={styles.buttonsRow}>
-                    <Button mode="contained" buttonColor="#43A047" onPress={() => handleRegister('INGRESO')} style={styles.actionButton} loading={loading}>
+                    <Button
+                      mode="contained"
+                      buttonColor="#43A047"
+                      onPress={() => handleRegister('INGRESO')}
+                      onPressIn={() => setPressedTipo('INGRESO')}
+                      onPressOut={() => setPressedTipo(null)}
+                      style={[styles.actionButton, (pressedTipo === 'INGRESO' || registeringTipo === 'INGRESO') && styles.actionButtonPressed]}
+                      loading={registeringTipo === 'INGRESO'}
+                      disabled={!!registeringTipo || loading}
+                    >
                       INGRESO
                     </Button>
                     {SHOW_SALIDA_BUTTON && (
-                      <Button mode="contained" buttonColor="#FA8072" onPress={() => handleRegister('SALIDA')} style={styles.actionButton} loading={loading} disabled={loading}>
+                      <Button
+                        mode="contained"
+                        buttonColor="#FA8072"
+                        onPress={() => handleRegister('SALIDA')}
+                        onPressIn={() => setPressedTipo('SALIDA')}
+                        onPressOut={() => setPressedTipo(null)}
+                        style={[styles.actionButton, (pressedTipo === 'SALIDA' || registeringTipo === 'SALIDA') && styles.actionButtonPressed]}
+                        loading={registeringTipo === 'SALIDA'}
+                        disabled={!!registeringTipo || loading}
+                      >
                         SALIDA
                       </Button>
                     )}
@@ -810,8 +1016,8 @@ export default function ViewAsistencia() {
                           style={styles.filteredList}
                           contentContainerStyle={{ paddingBottom: 16 }}
                           keyboardShouldPersistTaps="handled"
-                          ListHeaderComponent={renderListHeader}
-                          renderItem={RenderRowMemo}
+                          ListHeaderComponent={renderFilteredListHeader}
+                          renderItem={renderFilteredRow}
                           nestedScrollEnabled={true}
                           showsVerticalScrollIndicator={true}
                           persistentScrollbar={true}
@@ -838,8 +1044,9 @@ export default function ViewAsistencia() {
         timeValue: { fontSize: 44, fontWeight: '700', color: '#231F36' },
         tabsRow: { flexDirection: 'row', marginBottom: 12 },
         tabButton: { flex: 1, marginHorizontal: 4 },
-        buttonsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-        actionButton: { flex: 1, marginHorizontal: 6, paddingVertical: 12 },
+        buttonsRow: { marginBottom: 12 },
+        actionButton: { width: '100%', marginBottom: 10, paddingVertical: 12 },
+        actionButtonPressed: { opacity: 0.75 },
         valorFinText: { marginTop: -4, marginBottom: 8, marginHorizontal: 6, color: '#231F36', fontSize: 13, fontWeight: '700' },
         coordsText: { marginTop: 0, marginBottom: 4, marginHorizontal: 6, color: '#231F36', fontSize: 13 },
         compareButton: { marginBottom: 8 },
@@ -871,7 +1078,10 @@ export default function ViewAsistencia() {
         cellIdEstado: { minWidth: 82 },
         cellEstadoMarcacion: { minWidth: 140 },
         cellHora: { minWidth: 82 },
-        cellAccion: { width: 56, alignItems: 'center' },
+        cellHoraSalida: { minWidth: 62, textAlign: 'left', paddingHorizontal: 4 },
+        cellAccion: { width: 22, alignItems: 'center', paddingHorizontal: 0 },
+        cellAccionTight: { width: 18, alignItems: 'center', paddingHorizontal: 0 },
+        iconButtonCompact: { margin: 0, width: 18, height: 18 },
         headerRow: { flexDirection: 'row', paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#ddd' },
         headerCell: { paddingHorizontal: 8, fontWeight: '700', flexShrink: 0 },
         detalleCard: { backgroundColor: '#fff', padding: 10, borderRadius: 6, marginTop: 6, borderWidth: 1, borderColor: '#eee' },

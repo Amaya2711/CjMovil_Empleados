@@ -26,9 +26,8 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
   }));
 };
 
-export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon }) => {
+export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, outOfRange = false }) => {
   const pool = await getConnection();
-  const request = pool.request();
   const usuarioActNumber = Number.parseInt(String(usuarioAct ?? '').trim(), 10);
   if (!Number.isFinite(usuarioActNumber)) {
     throw new Error('UsuarioAct inválido para sp_Asistencia_Marcar');
@@ -41,19 +40,42 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon }) 
   const lonNumber = (lon === null || typeof lon === 'undefined' || String(lon).trim() === '') ? null : Number(lon);
   const latValue = Number.isFinite(latNumber) ? latNumber : null;
   const lonValue = Number.isFinite(lonNumber) ? lonNumber : null;
+  const outOfRangeValue = !!outOfRange;
 
-  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A');
-  request.input('UsuarioAct', sql.Int, usuarioActNumber);
-  request.input('pEnvio', sql.Int, pEnvio);
-  if (pEnvio === 2) {
-    request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
-    request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
-  } else {
-    request.input('Latitud', sql.Decimal(18, 6), latValue);
-    request.input('Longitud', sql.Decimal(18, 6), lonValue);
+  const executeRegister = async (includeEstadoParams) => {
+    const request = pool.request();
+    request.input('UsuarioAct', sql.Int, usuarioActNumber);
+    request.input('pEnvio', sql.Int, pEnvio);
+    if (pEnvio === 2) {
+      request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
+      request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
+      if (includeEstadoParams && outOfRangeValue) {
+        request.input('EstadoSalida', sql.Int, 9);
+      }
+    } else {
+      request.input('Latitud', sql.Decimal(18, 6), latValue);
+      request.input('Longitud', sql.Decimal(18, 6), lonValue);
+      if (includeEstadoParams && outOfRangeValue) {
+        request.input('EstadoMarcacion', sql.Int, 9);
+      }
+    }
+    return request.execute('sp_Asistencia_Marcar');
+  };
+
+  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s outOfRange=%s', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A', outOfRangeValue);
+  try {
+    const result = await executeRegister(true);
+    return result.recordset || result;
+  } catch (error) {
+    const message = String(error?.message || '');
+    const unknownParam = /parameter name|expects parameter|too many arguments|not a parameter for procedure/i.test(message);
+    if (outOfRangeValue && unknownParam) {
+      console.warn('[registerAsistenciaService] SP sin parámetros EstadoMarcacion/EstadoSalida, se ejecuta sin forzar estado=9');
+      const result = await executeRegister(false);
+      return result.recordset || result;
+    }
+    throw error;
   }
-  const result = await request.execute('sp_Asistencia_Marcar');
-  return result.recordset || result;
 };
 
 export const cargarListadoDiarioService = async (usuarioCre) => {

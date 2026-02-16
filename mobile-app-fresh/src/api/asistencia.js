@@ -20,13 +20,16 @@ export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
   }
 };
 
-export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia } = {}) => {
+export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, outOfRange } = {}) => {
   try {
     const url = `${BASE_URL}${API_BASE}/register`;
     const body = { usuarioAct, codEmp, tipo, fechaAsistencia };
     if (typeof lat !== 'undefined' && typeof lon !== 'undefined') {
       body.lat = lat;
       body.lon = lon;
+    }
+    if (typeof outOfRange !== 'undefined') {
+      body.outOfRange = !!outOfRange;
     }
     console.log('[registerAsistencia][REQUEST]', { url, body });
     const res = await fetch(url, {

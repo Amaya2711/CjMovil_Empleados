@@ -1,18 +1,83 @@
-import React, { useContext } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import React, { useContext, useState } from 'react';
+import { View, StyleSheet, Dimensions, Platform, Linking, Alert } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';
 import { UserContext } from '../context/UserContext';
+import * as Location from 'expo-location';
 
 const SEGMENTS = 8;
 
 export default function MainMenuScreen({ navigation }) {
   const { nombreEmpleado } = useContext(UserContext);
+  const [validatingAsistencia, setValidatingAsistencia] = useState(false);
+
+  const openLocationSettings = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+        return;
+      } catch (e) {
+        const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
+        try {
+          await Linking.openURL(intentUrl);
+          return;
+        } catch (err) {
+          // fallback a settings de app
+        }
+      }
+    }
+    await Linking.openSettings();
+  };
+
+  const handleAsistenciaPress = async () => {
+    if (validatingAsistencia) return;
+    setValidatingAsistencia(true);
+    try {
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          'Ubicación desactivada',
+          'Para ingresar a Asistencia debe activar la ubicación del dispositivo.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Abrir configuración', onPress: () => openLocationSettings() },
+          ]
+        );
+        return;
+      }
+
+      const currentPermissions = await Location.getForegroundPermissionsAsync();
+      let permissionStatus = currentPermissions?.status;
+      if (permissionStatus !== 'granted') {
+        const requested = await Location.requestForegroundPermissionsAsync();
+        permissionStatus = requested?.status;
+      }
+
+      if (permissionStatus !== 'granted') {
+        Alert.alert(
+          'Permiso requerido',
+          'Para usar Asistencia debe permitir la ubicación para esta aplicación.',
+          [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Abrir configuración', onPress: () => openLocationSettings() },
+          ]
+        );
+        return;
+      }
+
+      navigation.navigate('ViewAsistencia');
+    } catch (e) {
+      Alert.alert('Error', 'No se pudo validar la ubicación. Intente nuevamente.');
+    } finally {
+      setValidatingAsistencia(false);
+    }
+  };
+
   const handleLogout = () => {
     navigation.replace('Login');
   };
   const OPTIONS = [
     { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado.'); navigation.navigate('ReportePagos'); } },
-    { label: 'Asistencia', onPress: () => { navigation.navigate('ViewAsistencia'); } },
+    { label: 'Asistencia', onPress: handleAsistenciaPress },
   ];
   return (
     <View style={styles.container}>

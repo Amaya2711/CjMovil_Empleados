@@ -412,11 +412,16 @@ export default function ViewAsistencia() {
 
           if (Platform.OS === 'android') {
             try {
-              // Preferir configuración de la app (permiso de ubicación para este programa)
-              await Linking.openSettings();
+              await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+              return;
             } catch (e) {
               const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
-              Linking.openURL(intentUrl);
+              try {
+                await Linking.openURL(intentUrl);
+                return;
+              } catch (err) {
+                await Linking.openSettings();
+              }
             }
             return;
           }

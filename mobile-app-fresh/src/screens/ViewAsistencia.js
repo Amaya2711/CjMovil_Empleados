@@ -387,13 +387,36 @@ export default function ViewAsistencia() {
         };
 
         const openLocationSettings = async () => {
-          if (Platform.OS === 'android') {
-            // Intent to open Location Source Settings; fallback to app settings
-            const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
+          if (Platform.OS === 'web') {
             try {
-              await Linking.openURL(intentUrl);
+              const origin = typeof window !== 'undefined' ? window.location.origin : '';
+              const site = encodeURIComponent(origin || '');
+              const userAgent = typeof navigator !== 'undefined' ? String(navigator.userAgent || '').toLowerCase() : '';
+
+              if (typeof window !== 'undefined' && userAgent.includes('edg')) {
+                window.location.href = 'edge://settings/content/location';
+                return;
+              }
+
+              if (typeof window !== 'undefined' && userAgent.includes('chrome')) {
+                window.location.href = `chrome://settings/content/siteDetails?site=${site}`;
+                return;
+              }
             } catch (e) {
-              Linking.openSettings();
+              // Si falla, continuar con mensaje guía
+            }
+
+            setMessage('Abra el candado del navegador en la barra de dirección y permita Ubicación para este sitio. Luego recargue la página.');
+            return;
+          }
+
+          if (Platform.OS === 'android') {
+            try {
+              // Preferir configuración de la app (permiso de ubicación para este programa)
+              await Linking.openSettings();
+            } catch (e) {
+              const intentUrl = 'intent:#Intent;action=android.settings.LOCATION_SOURCE_SETTINGS;end';
+              Linking.openURL(intentUrl);
             }
             return;
           }

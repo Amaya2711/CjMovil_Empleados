@@ -109,11 +109,72 @@ export default function ViewAsistencia() {
           }
         };
 
+        const formatTimeLima = (val) => {
+          if (!val && val !== 0) return '';
+          try {
+            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(val)) {
+              return val.split('.')[0];
+            }
+
+            let d;
+            if (val instanceof Date) d = val;
+            else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
+            else d = new Date(val);
+            if (isNaN(d.getTime())) return String(val);
+
+            try {
+              const formatter = new Intl.DateTimeFormat('es-PE', {
+                timeZone: 'America/Lima',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+              });
+              return formatter.format(d);
+            } catch (e) {
+              const utc = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+              const lima = new Date(utc.getTime() - 5 * 60 * 60000);
+              const hh = String(lima.getHours()).padStart(2, '0');
+              const mm = String(lima.getMinutes()).padStart(2, '0');
+              const ss = String(lima.getSeconds()).padStart(2, '0');
+              return `${hh}:${mm}:${ss}`;
+            }
+          } catch (e) {
+            return String(val);
+          }
+        };
+
         const formatEstadoLabel = (val) => {
           const raw = val === null || typeof val === 'undefined' ? '' : String(val).trim();
           if (!raw) return 'SIN ESTADO';
           if (raw === '0') return 'NO LLENADO';
           return raw;
+        };
+
+        const isEstadoFueraRango = (item = {}) => {
+          const estadoMarcacionValue =
+            item.EstadoMarcacion ??
+            item.estadoMarcacion ??
+            item.Estado_Marcacion ??
+            item.estado_marcacion ??
+            null;
+          const estadoSalidaValue =
+            item.EstadoSalida ??
+            item.estadoSalida ??
+            item.EstadoSalda ??
+            item.estadoSalda ??
+            item.Estado_Salida ??
+            item.estado_salida ??
+            null;
+
+          const estadoMarcacion = estadoMarcacionValue === null || typeof estadoMarcacionValue === 'undefined'
+            ? ''
+            : String(estadoMarcacionValue).trim();
+          const estadoSalida = estadoSalidaValue === null || typeof estadoSalidaValue === 'undefined'
+            ? ''
+            : String(estadoSalidaValue).trim();
+
+          return estadoMarcacion === '9' || estadoSalida === '9';
         };
 
 
@@ -635,9 +696,10 @@ export default function ViewAsistencia() {
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
             const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
+            const highlighted = isEstadoFueraRango(item);
             return (
               <View>
-                <View style={[styles.row, { backgroundColor: '#fff', minHeight: 20 }]}> 
+                <View style={[styles.row, { backgroundColor: highlighted ? '#ffd9d2' : '#fff', minHeight: 20 }]}> 
                   <Text style={[styles.cell, styles.cellEstado, { color: '#000' }]}>{estado}</Text>
                   <Text style={[styles.cell, styles.cellFecha, { color: '#000' }]}>{fecha}</Text>
                   <Text style={[styles.cell, styles.cellHora, { color: '#000' }]}>{hora}</Text>
@@ -683,7 +745,7 @@ export default function ViewAsistencia() {
         const renderFilteredRow = useCallback(({ item }) => {
           try {
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const hora = formatTimeLima(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const horaSalidaRaw =
               item.HoraSalida ??
               item.horaSalida ??
@@ -696,11 +758,12 @@ export default function ViewAsistencia() {
               item.HoraFin ??
               item.horaFin ??
               '';
-            const horaSalida = horaSalidaRaw ? formatTime(horaSalidaRaw) : '--';
+            const horaSalida = horaSalidaRaw ? formatTimeLima(horaSalidaRaw) : '--';
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
+            const highlighted = isEstadoFueraRango(item);
             return (
               <View>
-                <View style={[styles.row, { backgroundColor: '#fff', minHeight: 20 }]}> 
+                <View style={[styles.row, { backgroundColor: highlighted ? '#ffd9d2' : '#fff', minHeight: 20 }]}> 
                   <Text style={[styles.cell, styles.cellFecha, { color: '#000' }]}>{fecha}</Text>
                   <Text style={[styles.cell, styles.cellHora, { color: '#000' }]}>{hora}</Text>
                   <View style={[styles.cell, styles.cellAccion]}>

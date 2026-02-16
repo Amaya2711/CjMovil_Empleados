@@ -361,15 +361,14 @@ export default function ViewAsistencia() {
               if (typeof navigator === 'undefined' || !navigator.geolocation) {
                 return false;
               }
-              return await new Promise((resolve) => {
-                navigator.geolocation.getCurrentPosition(
-                  () => resolve(true),
-                  () => resolve(false),
-                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
-                );
-              });
+              const permissionsApi = navigator.permissions;
+              if (permissionsApi && permissionsApi.query) {
+                const status = await permissionsApi.query({ name: 'geolocation' });
+                return status?.state !== 'denied';
+              }
+              return true;
             } catch (e) {
-              return false;
+              return true;
             }
           }
 
@@ -483,7 +482,16 @@ export default function ViewAsistencia() {
             const outOfRange = distance !== null && distance > MAX_DISTANCE_METERS;
             await executeRegister(tipo, coords, warningMessage, outOfRange);
           } catch (err) {
-            setMessage(LOCATION_REQUIRED_MESSAGE);
+            const errorCode = Number(err?.code);
+            if (errorCode === 1) {
+              setMessage('Permiso de ubicación denegado. Habilítelo en el navegador para continuar.');
+            } else if (errorCode === 2) {
+              setMessage('No se pudo obtener la ubicación actual del dispositivo. Inténtelo nuevamente.');
+            } else if (errorCode === 3) {
+              setMessage('La obtención de ubicación excedió el tiempo de espera. Inténtelo nuevamente.');
+            } else {
+              setMessage(err?.message || 'No se pudo completar el registro.');
+            }
           } finally {
             setRegisteringTipo(null);
             setPressedTipo(null);
@@ -534,7 +542,11 @@ export default function ViewAsistencia() {
             setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);
             setActiveTab('RESUMEN');
             setSelectedResumenEstado('__ALL__');
-            await fetchData();
+            try {
+              await fetchData();
+            } catch (e) {
+              console.warn('No se pudo refrescar el resumen tras registrar asistencia:', e?.message || e);
+            }
           } else {
             setMessage(res.message || 'Error al registrar');
           }

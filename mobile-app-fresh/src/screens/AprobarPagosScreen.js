@@ -751,7 +751,7 @@ export default function AprobarPagosScreen() {
                       ipLocalMod = '192.168.0.1';
                     }
                     const seleccionadosData = resultados.filter(item => seleccionados.includes(String(item.Corre)));
-                    let IdEstValue = 1;
+                    let IdEstValue = accionActual === 'aprobar' ? 10 : 1;
                     if (accionActual === 'rechazar') IdEstValue = 3;
                     if (accionActual === 'observar') IdEstValue = 2;
                     const montoLimiteSoles = 2000;

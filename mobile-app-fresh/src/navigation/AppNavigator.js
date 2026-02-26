@@ -19,7 +19,7 @@ export default function AppNavigator() {
     <Stack.Navigator initialRouteName="Login">
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Iniciar Sesión' }} />
       <Stack.Screen name="MainMenu" component={MainMenuScreen} options={{ title: 'Menú Principal' }} />
-      <Stack.Screen name="AprobarPagos" component={AprobarPagosScreen} options={{ title: 'Aprobar Pagos' }} />
+      <Stack.Screen name="AprobarPagos" component={AprobarPagosScreen} options={{ title: 'Aprobar Hormigas' }} />
       <Stack.Screen name="ReAprobarPagos" component={ReAprobarPagosScreen} />
       <Stack.Screen name="ReAprobarHormigas" component={ReAprobarHormigasScreen} options={{ title: 'Re-Aprobar Hormigas' }} />
       <Stack.Screen

@@ -14,7 +14,7 @@ export default function MainMenuScreen({ navigation }) {
     { label: 'Asistencia', onPress: () => { console.log('Botón Asistencia presionado'); navigation.navigate('Asistencia'); } },
     { label: 'Orden Compra', onPress: () => { console.log('Botón Orden Compra presionado'); navigation.navigate('Oc'); } },
     { label: 'Opción 6', onPress: () => {} },
-    { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado'); navigation.navigate('ReportePagos'); } },
+    { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado.'); navigation.navigate('ReportePagos'); } },
     { label: 'Opción 8', onPress: () => {} },
   ];
   const handleLogout = () => {

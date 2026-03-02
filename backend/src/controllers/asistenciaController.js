@@ -1,0 +1,138 @@
+import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService } from '../services/asistenciaService.js';
+
+export const getAsistencia = async (req, res) => {
+  try {
+    const codEmp = req.query.codEmp || req.body?.codEmp || '';
+    const fechaAsistencia = req.query.fechaAsistencia || req.body?.fechaAsistencia || null;
+    // El parámetro que espera el SP es IdEmpleado
+    const idEmpleado = codEmp;
+    const rows = await getAsistenciaService(idEmpleado, fechaAsistencia);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error al obtener asistencia:', error);
+    res.status(500).json({ message: 'Error al obtener asistencia', error: error.message });
+  }
+};
+
+export const registerAsistencia = async (req, res) => {
+  try {
+    const { usuarioAct, codEmp, tipo, lat, lon, outOfRange, fechaAsistencia } = req.body || {};
+    const comentarioRaw = req.body?.comentario ?? req.body?.Comentario ?? '';
+    const tipoValue = String(tipo ?? '').trim().toUpperCase();
+    const comentarioValue = String(comentarioRaw ?? '').trim();
+    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, outOfRange, comentarioLength: comentarioValue.length });
+    if (String(tipo || '').toUpperCase() === 'SALIDA') {
+      console.log('[SALIDA][BODY]', {
+        usuarioAct,
+        codEmp,
+        tipo,
+        lat,
+        lon,
+        sourceIp: req.ip,
+      });
+    }
+    const normalize = (value) => (value === null || typeof value === 'undefined' ? '' : String(value).trim());
+    const usuarioActRaw = normalize(usuarioAct);
+    const codEmpRaw = normalize(codEmp);
+    const usuarioActValue = /^\d+$/.test(usuarioActRaw)
+      ? usuarioActRaw
+      : (/^\d+$/.test(codEmpRaw) ? codEmpRaw : usuarioActRaw || codEmpRaw);
+
+    if (!usuarioActValue) {
+      return res.status(400).json({ message: 'Parámetro usuarioAct es requerido.' });
+    }
+
+    if (tipoValue === 'INGRESO') {
+      if (!comentarioValue) {
+        return res.status(400).json({ message: 'El comentario es obligatorio para INGRESO.' });
+      }
+      if (comentarioValue.length > 250) {
+        return res.status(400).json({ message: 'El comentario no puede superar los 250 caracteres.' });
+      }
+    }
+
+    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, outOfRange: !!outOfRange, comentario: comentarioValue, fechaAsistencia });
+    const resultRows = Array.isArray(result)
+      ? result
+      : Array.isArray(result?.recordset)
+        ? result.recordset
+        : [];
+    const firstRow = resultRows.length > 0 ? resultRows[0] : null;
+    if (firstRow && typeof firstRow.Ok !== 'undefined' && Number(firstRow.Ok) === 0) {
+      return res.status(400).json({
+        success: false,
+        message: firstRow.Mensaje || 'No se pudo registrar asistencia.',
+        result,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: firstRow?.Mensaje || 'Registro realizado correctamente',
+      result,
+      debugPersistedComentario: result?.debugPersistedComentario ?? null,
+      debugPersistedHora: result?.debugPersistedHora ?? null,
+      debugPersistedIdEmpleado: result?.debugPersistedIdEmpleado ?? null,
+    });
+  } catch (error) {
+    console.error('Error al registrar asistencia...:', error);
+    const errorMessage = String(error?.message || '');
+    if (/UsuarioAct inválido/i.test(errorMessage)) {
+      return res.status(400).json({ message: errorMessage, error: errorMessage });
+    }
+    res.status(500).json({ message: 'Error al registrar asistencia..', error: errorMessage });
+  }
+};
+
+export const cargarListadoDiario = async (req, res) => {
+  try {
+    const usuarioCreRaw = typeof req.body?.usuarioCre !== 'undefined'
+      ? req.body?.usuarioCre
+      : req.query?.usuarioCre;
+    if (usuarioCreRaw === null || typeof usuarioCreRaw === 'undefined' || String(usuarioCreRaw).trim() === '') {
+      return res.status(400).json({ message: 'Parámetro usuarioCre es requerido' });
+    }
+    const rows = await cargarListadoDiarioService(usuarioCreRaw);
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    const errorMessage = String(error?.message || '');
+    const missingStoredProcedure = /Could not find stored procedure\s+'sp_CargarListadoDiario'/i.test(errorMessage);
+    if (missingStoredProcedure) {
+      console.warn('SP sp_CargarListadoDiario no existe en la base de datos configurada. Se devuelve listado vacío.');
+      return res.json({
+        success: true,
+        data: [],
+        warning: 'SP sp_CargarListadoDiario no encontrado'
+      });
+    }
+    console.error('Error al validar listado diario:', error);
+    res.status(500).json({ message: 'Error al validar listado diario', error: error.message });
+  }
+};
+
+export const getConstanteOficinas = async (req, res) => {
+  try {
+    const rows = await constanteOficinasService();
+    const firstRow = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+    const valorFin =
+      firstRow?.ValorFin ??
+      firstRow?.valorFin ??
+      firstRow?.ValorFinal ??
+      firstRow?.valorFinal ??
+      null;
+    res.json({ success: true, valorFin, data: rows });
+  } catch (error) {
+    console.error('Error al obtener constante de oficinas:', error);
+    res.status(500).json({ message: 'Error al obtener constante de oficinas', error: error.message });
+  }
+};
+
+export const eliminarAsistenciaPrueba = async (req, res) => {
+  try {
+    const result = await eliminarAsistenciaPruebaService();
+    res.json({ success: true, result, message: 'Proceso de eliminación de prueba ejecutado correctamente' });
+  } catch (error) {
+    console.error('Error al ejecutar sp_Asistencia_Eliminar_Prueba:', error);
+    res.status(500).json({ message: 'Error al ejecutar eliminación de prueba', error: error.message });
+  }
+};

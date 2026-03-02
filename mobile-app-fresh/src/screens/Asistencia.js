@@ -56,7 +56,7 @@ export default function AsistenciaScreen() {
   const validarFechaCampo = (fechaTexto) => {
     const valor = String(fechaTexto || '').trim();
     if (!valor) return '';
-    if (!esFechaValida(valor)) return 'Formato inválido (dd/mm/yyyy)';
+    if (!esFechaValida(valor)) return 'Formato inválido (dd/mm/yyyy).';
     const fecha = parseFecha(valor);
     if (fecha && fecha < fechaMinima) return 'La fecha mínima es 01/01/2024';
     return '';

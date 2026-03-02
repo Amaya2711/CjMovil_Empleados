@@ -50,19 +50,24 @@ export const cargarListadoDiario = async (req, res) => {
     const usuarioCreRaw = typeof req.body?.usuarioCre !== 'undefined'
       ? req.body?.usuarioCre
       : req.query?.usuarioCre;
+    console.log('[cargarListadoDiario] usuarioCreRaw:', usuarioCreRaw);
     if (usuarioCreRaw === null || typeof usuarioCreRaw === 'undefined' || String(usuarioCreRaw).trim() === '') {
-      return res.status(400).json({ message: 'Parámetro usuarioCre es requerido' });
+      console.warn('[cargarListadoDiario] usuarioCre no proporcionado');
+      return res.json({ success: true, data: [], warning: 'usuarioCre no proporcionado' });
     }
+    console.log('[cargarListadoDiario] Llamando servicio con usuarioCre:', usuarioCreRaw);
     const rows = await cargarListadoDiarioService(usuarioCreRaw);
+    console.log('[cargarListadoDiario] SP ejecutado, filas:', rows?.length || 0);
     res.json({ success: true, data: rows });
   } catch (error) {
     const errorMessage = String(error?.message || '');
+    console.error('[cargarListadoDiario] Error:', errorMessage, error);
     const missingStoredProcedure = /Could not find stored procedure\s+'sp_CargarListadoDiario'/i.test(errorMessage);
     
     // Si el SP no existe o hay cualquier error en la validación del listado diario,
     // devolver array vacío con aviso (esto es un proceso no crítico)
     if (missingStoredProcedure) {
-      console.warn('SP sp_CargarListadoDiario no existe en la base de datos configurada. Se devuelve listado vacío.');
+      console.warn('[cargarListadoDiario] SP sp_CargarListadoDiario no existe. Devolviendo array vacío.');
       return res.json({
         success: true,
         data: [],
@@ -71,11 +76,11 @@ export const cargarListadoDiario = async (req, res) => {
     }
     
     // Para cualquier otro error, también devolvemos array vacío (validación no crítica)
-    console.warn('Error al validar listado diario (no crítico):', error);
+    console.warn('[cargarListadoDiario] Error al validar (no crítico):', errorMessage);
     res.json({
       success: true,
       data: [],
-      warning: 'No se pudo validar el listado diario: ' + errorMessage
+      warning: 'Error: ' + errorMessage
     });
   }
 };

@@ -261,6 +261,7 @@ export default function ViewAsistencia() {
           } else {
             const validacion = await validarListadoDiario({ usuarioCre });
             if (!mounted.current) return;
+            console.log('[ViewAsistencia] Resultado de validacion listado diario:', validacion);
             if (!validacion || (validacion.error === true && validacion.success !== true)) {
               const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
               const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
@@ -268,9 +269,10 @@ export default function ViewAsistencia() {
                 setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
               }
               setApiDebug(`listado-diario:${technicalDetail}`);
-              console.warn('Validación listado diario falló:', technicalDetail);
+              console.warn('[ViewAsistencia] Validación listado diario falló:', technicalDetail);
               setIdEstadoDiario(null);
             } else {
+              console.log('[ViewAsistencia] Validación listado diario exitosa, data:', validacion?.data);
               const listadoDiario = Array.isArray(validacion?.data)
                 ? validacion.data
                 : Array.isArray(validacion)

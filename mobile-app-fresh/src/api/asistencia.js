@@ -49,14 +49,16 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
 export const validarListadoDiario = async ({ usuarioCre } = {}) => {
   try {
     const url = `${BASE_URL}${API_BASE}${LISTADO_DIARIO_PATH}`;
+    console.log('[validarListadoDiario] Llamando a:', url, 'con usuarioCre:', usuarioCre);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ usuarioCre }),
     });
     const payload = await res.json().catch(() => null);
+    console.log('[validarListadoDiario] Status:', res.status, 'Payload:', payload);
     if (!res.ok) {
-      throw new Error(payload?.error || payload?.message || 'Error al validar listado diario');
+      throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
     }
     // El backend devuelve { success: true, data: [], warning?: string }
     // Convertir a formato esperado por el frontend
@@ -67,7 +69,7 @@ export const validarListadoDiario = async ({ usuarioCre } = {}) => {
     };
   } catch (error) {
     // En caso de error de red, devolver array vacío (no es crítico)
-    console.warn('Error al validar listado diario:', error);
+    console.warn('[validarListadoDiario] Error:', error);
     return { success: true, data: [], message: error.message };
   }
 };

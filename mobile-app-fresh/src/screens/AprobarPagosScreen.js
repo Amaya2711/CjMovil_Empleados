@@ -1,3 +1,4 @@
+// ...existing code...
 import React, { useState, useEffect, useContext } from 'react';
 import { Modal, Portal, Provider, Snackbar, ActivityIndicator } from 'react-native-paper';
 import { getDatosOc } from '../api/datosOc';
@@ -38,11 +39,6 @@ export default function AprobarPagosScreen() {
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [loadingDatosOc, setLoadingDatosOc] = useState(false);
   const [solicitantes, setSolicitantes] = useState([]);
-  // Filtro de proyecto (debe estar solo aquí)
-  const [filtroProyecto, setFiltroProyecto] = useState('');
-  const [proyectos, setProyectos] = useState([]);
-  // Estado para mostrar/ocultar sugerencias de proyectos
-  const [showProjectSuggestions, setShowProjectSuggestions] = useState(false);
 
   // Función ultra segura para mostrar texto en <Text>
   const asText = (v) => {
@@ -140,17 +136,9 @@ export default function AprobarPagosScreen() {
       }
       setResultados(data);
       setResultadosOriginales(data);
-      // Extraer proyectos únicos de la búsqueda inicial
-      if (Array.isArray(data)) {
-        const proyectosUnicos = Array.from(new Set(data.map(item => item.nombreProyecto || item.Proyecto || ''))).filter(Boolean);
-        setProyectos(proyectosUnicos);
-      } else {
-        setProyectos([]);
-      }
     } catch (error) {
       setResultados([]);
       setResultadosOriginales([]);
-      setProyectos([]);
     }
     setSeleccionados([]);
   };
@@ -163,40 +151,22 @@ export default function AprobarPagosScreen() {
     // Buscar el solicitante seleccionado
     const seleccionado = solicitantes.find(s => String(s.NombreEmpleado) === filtroSolicitante);
     let idSolicitante = 0;
-    let proyectoValido = '';
     if (seleccionado && seleccionado.IdEmpleado) {
       idSolicitante = seleccionado.IdEmpleado;
-    } else if (filtroSolicitante) {
+    } else {
       Alert.alert(
         'Aviso',
         'Solicitante no existe, mostrando todos los datos',
         [{ text: 'OK' }]
       );
     }
-    // Validar proyecto
-    if (filtroProyecto && proyectos.includes(filtroProyecto)) {
-      proyectoValido = filtroProyecto;
-    }
     try {
       const aprobaciones = await getAprobaciones(idSolicitante); // 0 muestra todos los datos
-      let resultadosFiltrados = Array.isArray(aprobaciones) ? aprobaciones : [];
-      // Si hay proyecto válido, filtrar por proyecto
-      if (proyectoValido) {
-        resultadosFiltrados = resultadosFiltrados.filter(item => (item.nombreProyecto || item.Proyecto || '').toLowerCase() === proyectoValido.toLowerCase());
-      }
-      setResultados(resultadosFiltrados);
-      setResultadosOriginales(resultadosFiltrados);
-      // Extraer proyectos únicos de la búsqueda
-      if (Array.isArray(aprobaciones)) {
-        const proyectosUnicos = Array.from(new Set(aprobaciones.map(item => item.nombreProyecto || item.Proyecto || ''))).filter(Boolean);
-        setProyectos(proyectosUnicos);
-      } else {
-        setProyectos([]);
-      }
+      setResultados(Array.isArray(aprobaciones) ? aprobaciones : []);
+      setResultadosOriginales(Array.isArray(aprobaciones) ? aprobaciones : []);
     } catch (error) {
       setResultados([]);
       setResultadosOriginales([]);
-      setProyectos([]);
     }
     // ...los resultados en pantalla siempre serán los obtenidos en la búsqueda
   };
@@ -311,7 +281,7 @@ export default function AprobarPagosScreen() {
           <View style={styles.filtrosRow}>
             <View style={{ flex: 1 }}>
               <TextInput
-                placeholder="Buscar solicitante"
+                label="Buscar solicitante"
                 value={filtroSolicitante}
                 onChangeText={async text => {
                   setFiltroSolicitante(text);
@@ -320,7 +290,7 @@ export default function AprobarPagosScreen() {
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                style={{ backgroundColor: '#fff', marginRight: 4, minHeight: 32, height: 32 }}
+                style={{ backgroundColor: '#fff', marginRight: 4, minHeight: 40 }}
                 dense={true}
               />
               {showSuggestions && filtroSolicitante.length > 0 && (
@@ -351,41 +321,6 @@ export default function AprobarPagosScreen() {
               accessibilityLabel="Buscar"
             />
           </View>
-          <View style={styles.filtrosRow}>
-            <View style={{ flex: 1 }}>
-              <TextInput
-                placeholder="Filtrar por proyecto"
-                value={filtroProyecto}
-                onChangeText={text => {
-                  setFiltroProyecto(text);
-                  setShowProjectSuggestions(true);
-                }}
-                onFocus={() => setShowProjectSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowProjectSuggestions(false), 200)}
-                style={{ backgroundColor: '#fff', minHeight: 32, height: 32, marginTop: 0 }}
-                dense={true}
-                right={proyectos.length > 0 ? <TextInput.Icon icon="menu-down" /> : null}
-              />
-              {proyectos.length > 0 && showProjectSuggestions && (
-                <Card style={{ maxHeight: 200, marginBottom: 8 }}>
-                  {proyectos.filter(p => p.toLowerCase().includes(filtroProyecto.toLowerCase())).length === 0 ? (
-                    <List.Item title={<Text>No se encontraron proyectos</Text>} />
-                  ) : (
-                    proyectos.filter(p => p.toLowerCase().includes(filtroProyecto.toLowerCase())).map(p => (
-                      <List.Item
-                        key={p}
-                        title={p}
-                        onPress={() => {
-                          setFiltroProyecto(p);
-                          setShowProjectSuggestions(false);
-                        }}
-                      />
-                    ))
-                  )}
-                </Card>
-              )}
-            </View>
-          </View>
           <View style={styles.tabsContainerRow}>
             <Button
               mode={tab === 'todos' ? 'contained' : 'outlined'}
@@ -397,19 +332,16 @@ export default function AprobarPagosScreen() {
                 textAlign: 'center',
               }}
             >Pendientes</Button>
-              <Button
-                mode={tab === 'seleccionados' ? 'contained' : 'outlined'}
-                style={[styles.tabButton, { alignSelf: 'center', justifyContent: 'center', alignItems: 'center' }]}
-                onPress={() => setTab('seleccionados')}
-                labelStyle={{
-                  color: tab === 'seleccionados' ? '#fff' : '#7B3FF2',
-                  fontSize: 13,
-                  lineHeight: 18,
-                  textAlign: 'center',
-                  alignSelf: 'center',
-                  fontWeight: 'bold',
-                }}
-              >Seleccionados</Button>
+            <Button
+              mode={tab === 'seleccionados' ? 'contained' : 'outlined'}
+              style={styles.tabButton}
+              onPress={() => setTab('seleccionados')}
+              labelStyle={{
+                color: tab === 'seleccionados' ? '#fff' : '#7B3FF2',
+                fontSize: 13,
+                textAlign: 'center',
+              }}
+            >Seleccionados</Button>
           </View>
         </Card>
         {/* Etiqueta Resultados y Checkbox Todos antes del FlatList */}
@@ -474,16 +406,10 @@ export default function AprobarPagosScreen() {
           )}
           <FlatList
             data={tab === 'todos'
-              ? (Array.isArray(resultados)
-                  ? resultados
-                      .filter(item => !filtroProyecto || (item.nombreProyecto || item.Proyecto || '').toLowerCase().includes(filtroProyecto.toLowerCase()))
-                      .slice((page - 1) * pageSize, page * pageSize)
-                  : [])
+              ? (Array.isArray(resultados) ? resultados.slice((page - 1) * pageSize, page * pageSize) : [])
               : (Array.isArray(resultados)
-                  ? resultados
-                      .filter(item => Array.isArray(seleccionados) && seleccionados.includes(String(item.Corre)))
-                      .filter(item => !filtroProyecto || (item.nombreProyecto || item.Proyecto || '').toLowerCase().includes(filtroProyecto.toLowerCase()))
-                  : [])}
+                ? resultados.filter(item => Array.isArray(seleccionados) && seleccionados.includes(String(item.Corre)))
+                : [])}
             keyExtractor={(item) => `${safe(item.Corre)}_${safe(item.IdSite)}`}
             style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={{ paddingBottom: 24 }}
@@ -536,12 +462,12 @@ export default function AprobarPagosScreen() {
                   </View>
                   <View style={[styles.cell, { flexDirection: 'row', alignItems: 'center' }]}> 
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
-                      {/* Solo el valor de la fecha, sin la etiqueta */}
+                      <Text style={styles.cellLabel}>Fecha:</Text>
                       <Text style={{ fontSize: 13 }}>{asText(item.FecIngreso)}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
-                      <Text style={styles.cellLabel}>Proyecto:</Text>
-                      <Text style={{ fontSize: 13 }}>{asText(item.nombreProyecto)}</Text>
+                      <Text style={styles.cellLabel}>Total:</Text>
+                      <Text style={{ fontSize: 13 }}>{asText(item.Subtotal)} {asText(item.Moneda)}</Text>
                     </View>
                   </View>
                   <View style={styles.cell}>
@@ -556,13 +482,6 @@ export default function AprobarPagosScreen() {
                       <Text style={{ fontSize: 13 }}>{asText(item.Responsable)}</Text>
                     </View>
                   </View>
-                  <View style={styles.cell}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 13, marginRight: 12 }}>{asText(item.Site)}</Text>
-                      <Text style={styles.cellLabel}>Total:</Text>
-                      <Text style={{ fontSize: 13 }}>{asText(item.Subtotal)} {asText(item.Moneda)}</Text>
-                    </View>
-                  </View>
                   {item.SubOc !== undefined && item.SubOc !== null && item.SubOc !== '' ? (
                     <View style={styles.cell}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -573,22 +492,14 @@ export default function AprobarPagosScreen() {
                   ) : null}
                   {expandido[uniqueId] ? (
                     <View style={styles.detalleCard}>
-                      {/* Solo el valor de la fecha, sin la etiqueta */}
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.cellLabel}>Fecha:</Text>
                         <Text style={{ fontSize: 13 }}>{asText(item.FecIngreso)}</Text>
-                      </View>
-                      {/* Nueva línea: Site y Proyecto juntos */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                        <Text style={styles.cellLabel}>Site:</Text>
-                        <Text style={{ fontSize: 13, marginRight: 8 }}>{asText(item.Site)}</Text>
-                        <Text style={styles.cellLabel}>Proyecto:</Text>
-                        <Text style={{ fontSize: 13 }}>{asText(item.nombreProyecto)}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.cellLabel}>Detalle:</Text>
                         <Text style={{ fontSize: 13 }}>{asText(item.Detalle)}</Text>
                       </View>
-                      {/* Site eliminado del detalle, ya se muestra arriba */}
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.cellLabel}>Bien/Servicio:</Text>
                         <Text style={{ fontSize: 13 }}>{asText(item.Bien)}</Text>
@@ -600,6 +511,14 @@ export default function AprobarPagosScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.cellLabel}>Gestor:</Text>
                         <Text style={{ fontSize: 13 }}>{asText(item.Gestor)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.cellLabel}>Proyecto:</Text>
+                        <Text style={{ fontSize: 13 }}>{asText(item.nombreProyecto)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.cellLabel}>Site:</Text>
+                        <Text style={{ fontSize: 13 }}>{asText(item.Site)}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.cellLabel}>Subtotal:</Text>
@@ -751,7 +670,7 @@ export default function AprobarPagosScreen() {
                       ipLocalMod = '192.168.0.1';
                     }
                     const seleccionadosData = resultados.filter(item => seleccionados.includes(String(item.Corre)));
-                    let IdEstValue = accionActual === 'aprobar' ? 10 : 1;
+                    let IdEstValue = 1;
                     if (accionActual === 'rechazar') IdEstValue = 3;
                     if (accionActual === 'observar') IdEstValue = 2;
                     const montoLimiteSoles = 2000;
@@ -926,10 +845,8 @@ const styles = StyleSheet.create({
     filtrosRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 4,
-      gap: 4,
-      minHeight: 36,
-      paddingVertical: 2,
+      marginBottom: 8,
+      gap: 8,
     },
     tabsContainerRow: {
       flexDirection: 'row',
@@ -944,11 +861,10 @@ const styles = StyleSheet.create({
       marginHorizontal: 4,
       borderRadius: 8,
       minWidth: 100,
-      height: 48,
-      paddingVertical: 6,
+      height: 36,
+      paddingVertical: 0,
       justifyContent: 'center',
       alignItems: 'center',
-      overflow: 'visible',
     },
     searchButton: {
       minWidth: 36,
@@ -975,8 +891,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   filtrosCard: {
-    marginBottom: 8,
-    padding: 6,
+    marginBottom: 16,
+    padding: 12,
   },
   resultadosCard: {
     flex: 1,
@@ -1043,10 +959,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 12,
     color: '#7B3FF2',
-  },
-  cell: {
-    paddingVertical: 0, // Reducido aún más
-    paddingHorizontal: 8,
-    marginBottom: 0, // Sin margen extra
   },
 });

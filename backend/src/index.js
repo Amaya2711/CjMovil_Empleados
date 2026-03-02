@@ -11,9 +11,8 @@ import detallePagosRoutes from './routes/detallePagos.js';
 
 import aprobarPlanillaRoutes from './routes/aprobarPlanilla.js';
 import reaprobacionesRoutes from './routes/reaprobaciones.js';
-import hormigasRoutes from './routes/hormigas.js';
 import gastosRoutes from './routes/gastos.js';
-import ocRoutes from './routes/oc.js';
+import asistenciaRoutes from './routes/asistencia.js';
 
 dotenv.config();
 
@@ -30,19 +29,24 @@ app.use('/api', solicitanteRoutes);
 app.use('/api', datosocRoutes);
 app.use('/api', aprobarPlanillaRoutes);
 app.use('/api', gastosRoutes);
-app.use('/api', ocRoutes);
 app.use('/api/reportes/detalle-pagos', detallePagosRoutes);
 
 // Nueva ruta para reaprobaciones
 app.use('/api/Reaprobaciones', reaprobacionesRoutes);
-app.use('/api/Hormigas', hormigasRoutes);
+
+// Asistencia
+app.use('/api', asistenciaRoutes);
 
 app.get('/', (req, res) => {
-  res.send('API backend funcionando');
+  res.json({ ok: true, message: 'API backend funcionando' });
+});
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ message: 'Ruta API no encontrada' });
 });
 
 console.log('Valor de process.env.PORT:', process.env.PORT);
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor backend escuchando en puerto ${PORT} (0.0.0.0)`);
 });

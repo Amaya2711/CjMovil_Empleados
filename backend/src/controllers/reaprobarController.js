@@ -53,18 +53,3 @@ export const consultarReaprobaciones = async (req, res) => {
     res.status(500).json({ message: 'Error al consultar reaprobaciones', error: error.message });
   }
 };
-
-export const consultarHormigas = async (req, res) => {
-  try {
-    const { IdSolicitante } = req.body;
-    console.log('Ejecutando sp_Planilla_Consulta_Hormiga con:', { IdSolicitante });
-    const pool = await getConnection();
-    const request = pool.request();
-    request.input('IdSolicitante', sql.Int, IdSolicitante === undefined ? null : IdSolicitante);
-    const result = await request.execute('sp_Planilla_Consulta_Hormiga');
-    res.json({ success: true, result: result.recordset });
-  } catch (error) {
-    console.error('Error al consultar hormigas:', error);
-    res.status(500).json({ message: 'Error al consultar hormigas', error: error.message });
-  }
-};

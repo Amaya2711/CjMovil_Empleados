@@ -16,11 +16,8 @@ export const getAsistencia = async (req, res) => {
 
 export const registerAsistencia = async (req, res) => {
   try {
-    const { usuarioAct, codEmp, tipo, lat, lon, outOfRange, fechaAsistencia } = req.body || {};
-    const comentarioRaw = req.body?.comentario ?? req.body?.Comentario ?? '';
-    const tipoValue = String(tipo ?? '').trim().toUpperCase();
-    const comentarioValue = String(comentarioRaw ?? '').trim();
-    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, outOfRange, comentarioLength: comentarioValue.length });
+    const { usuarioAct, codEmp, tipo, lat, lon } = req.body || {};
+    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon });
     if (String(tipo || '').toUpperCase() === 'SALIDA') {
       console.log('[SALIDA][BODY]', {
         usuarioAct,
@@ -31,56 +28,20 @@ export const registerAsistencia = async (req, res) => {
         sourceIp: req.ip,
       });
     }
-    const normalize = (value) => (value === null || typeof value === 'undefined' ? '' : String(value).trim());
-    const usuarioActRaw = normalize(usuarioAct);
-    const codEmpRaw = normalize(codEmp);
-    const usuarioActValue = /^\d+$/.test(usuarioActRaw)
-      ? usuarioActRaw
-      : (/^\d+$/.test(codEmpRaw) ? codEmpRaw : usuarioActRaw || codEmpRaw);
+    const usuarioActValue =
+      usuarioAct === null || typeof usuarioAct === 'undefined'
+        ? (codEmp === null || typeof codEmp === 'undefined' ? '' : String(codEmp).trim())
+        : String(usuarioAct).trim();
 
     if (!usuarioActValue) {
-      return res.status(400).json({ message: 'Parámetro usuarioAct es requerido.' });
+      return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });
     }
 
-    if (tipoValue === 'INGRESO') {
-      if (!comentarioValue) {
-        return res.status(400).json({ message: 'El comentario es obligatorio para INGRESO.' });
-      }
-      if (comentarioValue.length > 250) {
-        return res.status(400).json({ message: 'El comentario no puede superar los 250 caracteres.' });
-      }
-    }
-
-    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, outOfRange: !!outOfRange, comentario: comentarioValue, fechaAsistencia });
-    const resultRows = Array.isArray(result)
-      ? result
-      : Array.isArray(result?.recordset)
-        ? result.recordset
-        : [];
-    const firstRow = resultRows.length > 0 ? resultRows[0] : null;
-    if (firstRow && typeof firstRow.Ok !== 'undefined' && Number(firstRow.Ok) === 0) {
-      return res.status(400).json({
-        success: false,
-        message: firstRow.Mensaje || 'No se pudo registrar asistencia.',
-        result,
-      });
-    }
-
-    res.json({
-      success: true,
-      message: firstRow?.Mensaje || 'Registro realizado correctamente',
-      result,
-      debugPersistedComentario: result?.debugPersistedComentario ?? null,
-      debugPersistedHora: result?.debugPersistedHora ?? null,
-      debugPersistedIdEmpleado: result?.debugPersistedIdEmpleado ?? null,
-    });
+    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon });
+    res.json({ success: true, result });
   } catch (error) {
-    console.error('Error al registrar asistencia...:', error);
-    const errorMessage = String(error?.message || '');
-    if (/UsuarioAct inválido/i.test(errorMessage)) {
-      return res.status(400).json({ message: errorMessage, error: errorMessage });
-    }
-    res.status(500).json({ message: 'Error al registrar asistencia..', error: errorMessage });
+    console.error('Error al registrar asistencia:', error);
+    res.status(500).json({ message: 'Error al registrar asistencia', error: error.message });
   }
 };
 

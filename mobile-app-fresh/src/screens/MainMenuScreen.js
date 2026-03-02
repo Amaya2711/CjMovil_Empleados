@@ -7,19 +7,13 @@ const SEGMENTS = 8;
 
 export default function MainMenuScreen({ navigation }) {
   const { nombreEmpleado } = useContext(UserContext);
-  const OPTIONS = [
-    { label: 'Aprobar', onPress: () => { console.log('Botón Aprobar presionado'); navigation.navigate('AprobarPagos'); } },
-    { label: 'Re-Aprobar', onPress: () => { console.log('Botón Re-Aprobar presionado'); navigation.navigate('ReAprobarPagos'); } },
-    { label: 'Hormiga', onPress: () => { console.log('Botón Hormiga presionado'); navigation.navigate('ReAprobarHormigas'); } },
-    { label: 'Asistencia', onPress: () => { console.log('Botón Asistencia presionado'); navigation.navigate('Asistencia'); } },
-    { label: 'Orden Compra', onPress: () => { console.log('Botón Orden Compra presionado'); navigation.navigate('Oc'); } },
-    { label: 'Opción 6', onPress: () => {} },
-    { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado.'); navigation.navigate('ReportePagos'); } },
-    { label: 'Opción 8', onPress: () => {} },
-  ];
   const handleLogout = () => {
     navigation.replace('Login');
   };
+  const OPTIONS = [
+    { label: 'Reporte', onPress: () => { console.log('Botón Reporte presionado.'); navigation.navigate('ReportePagos'); } },
+    { label: 'Asistencia', onPress: () => { navigation.navigate('ViewAsistencia'); } },
+  ];
   return (
     <View style={styles.container}>
       <Text style={styles.bienvenida}>Bienvenido, {String(nombreEmpleado)}</Text>
@@ -30,7 +24,7 @@ export default function MainMenuScreen({ navigation }) {
               mode="contained"
               onPress={opt.onPress}
               style={styles.menuButton}
-              disabled={opt.label.startsWith('Opción')}
+              disabled={opt.label !== 'Asistencia'}
             >
               {opt.label}
             </Button>

@@ -16,9 +16,18 @@ const config = {
   }
 };
 
+console.log('SQLSERVER_DB en mssql.js:', process.env.SQLSERVER_DB);
+
 export const getConnection = async () => {
   try {
     const pool = await sql.connect(config);
+    try {
+      const r = await pool.request().query('SELECT DB_NAME() AS CurrentDB');
+      console.log('Conectado a base de datos:', r.recordset?.[0]?.CurrentDB);
+    } catch (e) {
+      // no bloquear si la query de verificación falla
+      console.warn('No se pudo verificar DB actual:', e.message);
+    }
     return pool;
   } catch (err) {
     throw new Error('Error de conexión a SQL Server: ' + err.message);

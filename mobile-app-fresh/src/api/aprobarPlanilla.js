@@ -1,5 +1,5 @@
 
-import axios from 'axios';
+import axios from 'axios/dist/browser/axios.cjs';
 import { BASE_URL } from '../config';
 
 // Ejecuta el store sp_Movil_AprobarPlanilla para un registro

@@ -20,13 +20,22 @@ export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
   }
 };
 
-export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia } = {}) => {
+export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida } = {}) => {
   try {
     const url = `${BASE_URL}${API_BASE}/register`;
     const body = { usuarioAct, codEmp, tipo, fechaAsistencia };
+    if (typeof comentario !== 'undefined') {
+      body.comentario = String(comentario || '').slice(0, 250);
+    }
     if (typeof lat !== 'undefined' && typeof lon !== 'undefined') {
       body.lat = lat;
       body.lon = lon;
+    }
+    if (typeof estadoMarcacion !== 'undefined') {
+      body.estadoMarcacion = estadoMarcacion;
+    }
+    if (typeof estadoSalida !== 'undefined') {
+      body.estadoSalida = estadoSalida;
     }
     console.log('[registerAsistencia][REQUEST]', { url, body });
     const res = await fetch(url, {
@@ -49,28 +58,18 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
 export const validarListadoDiario = async ({ usuarioCre } = {}) => {
   try {
     const url = `${BASE_URL}${API_BASE}${LISTADO_DIARIO_PATH}`;
-    console.log('[validarListadoDiario] Llamando a:', url, 'con usuarioCre:', usuarioCre);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ usuarioCre }),
     });
     const payload = await res.json().catch(() => null);
-    console.log('[validarListadoDiario] Status:', res.status, 'Payload:', payload);
     if (!res.ok) {
-      throw new Error(payload?.error || payload?.message || `HTTP ${res.status}`);
+      throw new Error(payload?.error || payload?.message || 'Error al validar listado diario');
     }
-    // El backend devuelve { success: true, data: [], warning?: string }
-    // Convertir a formato esperado por el frontend
-    return {
-      success: payload?.success !== false,
-      data: payload?.data || [],
-      warning: payload?.warning
-    };
+    return payload;
   } catch (error) {
-    // En caso de error de red, devolver array vacío (no es crítico)
-    console.warn('[validarListadoDiario] Error:', error);
-    return { success: true, data: [], message: error.message };
+    return { error: true, message: error.message };
   }
 };
 

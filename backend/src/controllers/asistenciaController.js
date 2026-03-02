@@ -16,8 +16,8 @@ export const getAsistencia = async (req, res) => {
 
 export const registerAsistencia = async (req, res) => {
   try {
-    const { usuarioAct, codEmp, tipo, lat, lon } = req.body || {};
-    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon });
+    const { usuarioAct, codEmp, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida } = req.body || {};
+    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
     if (String(tipo || '').toUpperCase() === 'SALIDA') {
       console.log('[SALIDA][BODY]', {
         usuarioAct,
@@ -37,7 +37,7 @@ export const registerAsistencia = async (req, res) => {
       return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });
     }
 
-    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon });
+    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
     res.json({ success: true, result });
   } catch (error) {
     console.error('Error al registrar asistencia:', error);
@@ -50,38 +50,24 @@ export const cargarListadoDiario = async (req, res) => {
     const usuarioCreRaw = typeof req.body?.usuarioCre !== 'undefined'
       ? req.body?.usuarioCre
       : req.query?.usuarioCre;
-    console.log('[cargarListadoDiario] usuarioCreRaw:', usuarioCreRaw);
     if (usuarioCreRaw === null || typeof usuarioCreRaw === 'undefined' || String(usuarioCreRaw).trim() === '') {
-      console.warn('[cargarListadoDiario] usuarioCre no proporcionado');
-      return res.json({ success: true, data: [], warning: 'usuarioCre no proporcionado' });
+      return res.status(400).json({ message: 'Parámetro usuarioCre es requerido' });
     }
-    console.log('[cargarListadoDiario] Llamando servicio con usuarioCre:', usuarioCreRaw);
     const rows = await cargarListadoDiarioService(usuarioCreRaw);
-    console.log('[cargarListadoDiario] SP ejecutado, filas:', rows?.length || 0);
     res.json({ success: true, data: rows });
   } catch (error) {
     const errorMessage = String(error?.message || '');
-    console.error('[cargarListadoDiario] Error:', errorMessage, error);
     const missingStoredProcedure = /Could not find stored procedure\s+'sp_CargarListadoDiario'/i.test(errorMessage);
-    
-    // Si el SP no existe o hay cualquier error en la validación del listado diario,
-    // devolver array vacío con aviso (esto es un proceso no crítico)
     if (missingStoredProcedure) {
-      console.warn('[cargarListadoDiario] SP sp_CargarListadoDiario no existe. Devolviendo array vacío.');
+      console.warn('SP sp_CargarListadoDiario no existe en la base de datos configurada. Se devuelve listado vacío.');
       return res.json({
         success: true,
         data: [],
         warning: 'SP sp_CargarListadoDiario no encontrado'
       });
     }
-    
-    // Para cualquier otro error, también devolvemos array vacío (validación no crítica)
-    console.warn('[cargarListadoDiario] Error al validar (no crítico):', errorMessage);
-    res.json({
-      success: true,
-      data: [],
-      warning: 'Error: ' + errorMessage
-    });
+    console.error('Error al validar listado diario:', error);
+    res.status(500).json({ message: 'Error al validar listado diario', error: error.message });
   }
 };
 

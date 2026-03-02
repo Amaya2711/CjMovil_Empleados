@@ -26,7 +26,7 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
   }));
 };
 
-export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon }) => {
+export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida }) => {
   const pool = await getConnection();
   const request = pool.request();
   const usuarioActNumber = Number.parseInt(String(usuarioAct ?? '').trim(), 10);
@@ -42,15 +42,22 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon }) 
   const latValue = Number.isFinite(latNumber) ? latNumber : null;
   const lonValue = Number.isFinite(lonNumber) ? lonNumber : null;
 
-  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A');
+  const comentarioValue = comentario === null || typeof comentario === 'undefined' ? null : String(comentario).slice(0, 250);
+  const estadoMarcacionValue = Number.isFinite(Number(estadoMarcacion)) ? Number(estadoMarcacion) : 1;
+  const estadoSalidaValue = Number.isFinite(Number(estadoSalida)) ? Number(estadoSalida) : 1;
+
+  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s comentario=%s estadoMarcacion=%d estadoSalida=%d', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A', comentarioValue ?? 'N/A', estadoMarcacionValue, estadoSalidaValue);
   request.input('UsuarioAct', sql.Int, usuarioActNumber);
   request.input('pEnvio', sql.Int, pEnvio);
+  request.input('Comentario', sql.NVarChar(250), comentarioValue);
   if (pEnvio === 2) {
     request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
     request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
+    request.input('EstadoSalida', sql.Int, estadoSalidaValue);
   } else {
     request.input('Latitud', sql.Decimal(18, 6), latValue);
     request.input('Longitud', sql.Decimal(18, 6), lonValue);
+    request.input('EstadoMarcacion', sql.Int, estadoMarcacionValue);
   }
   const result = await request.execute('sp_Asistencia_Marcar');
   return result.recordset || result;

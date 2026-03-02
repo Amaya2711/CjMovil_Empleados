@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText } from 'react-native';
-import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, MD3Colors } from 'react-native-paper';
+import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, MD3Colors, TextInput } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { UserContext } from '../context/UserContext';
 import { getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
@@ -42,6 +42,10 @@ export default function ViewAsistencia() {
   const [idEstadoDiario, setIdEstadoDiario] = useState(null);
   const [valorFin, setValorFin] = useState(null);
   const [currentCoords, setCurrentCoords] = useState(null);
+  const [ingresoDialogVisible, setIngresoDialogVisible] = useState(false);
+  const [ingresoComentario, setIngresoComentario] = useState('');
+  const [pendingIngresoCoords, setPendingIngresoCoords] = useState(null);
+  const [pendingIngresoWarning, setPendingIngresoWarning] = useState('');
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
 
@@ -261,18 +265,16 @@ export default function ViewAsistencia() {
           } else {
             const validacion = await validarListadoDiario({ usuarioCre });
             if (!mounted.current) return;
-            console.log('[ViewAsistencia] Resultado de validacion listado diario:', validacion);
-            if (!validacion || (validacion.error === true && validacion.success !== true)) {
+            if (!validacion || validacion.error) {
               const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
               const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
               if (showDevDetail) {
                 setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
               }
               setApiDebug(`listado-diario:${technicalDetail}`);
-              console.warn('[ViewAsistencia] Validación listado diario falló:', technicalDetail);
+              console.warn('Validación listado diario falló:', technicalDetail);
               setIdEstadoDiario(null);
             } else {
-              console.log('[ViewAsistencia] Validación listado diario exitosa, data:', validacion?.data);
               const listadoDiario = Array.isArray(validacion?.data)
                 ? validacion.data
                 : Array.isArray(validacion)
@@ -346,6 +348,18 @@ export default function ViewAsistencia() {
           try {
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest, maximumAge: 1000, timeout: 7000 });
             const { latitude, longitude, accuracy } = loc.coords;
+            const isFiniteCoords = Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude));
+            const isDefaultAndroidEmulatorPoint =
+              Math.abs(Number(latitude) - 37.4219983) < 0.0006 &&
+              Math.abs(Number(longitude) - (-122.084)) < 0.0006;
+
+            if (!isFiniteCoords) {
+              throw new Error('No se pudo obtener coordenadas válidas del GPS.');
+            }
+
+            if ((Platform.OS === 'android' && loc?.mocked) || isDefaultAndroidEmulatorPoint) {
+              throw new Error('El emulador está usando ubicación por defecto. Configure una ubicación en el emulador o use un dispositivo físico.');
+            }
             return { latitude, longitude, accuracy };
           } catch (e) {
             throw e;
@@ -408,13 +422,20 @@ export default function ViewAsistencia() {
                 ? `${warningMessage} La ubicación no es cercana al punto requerido (máximo 50 metros).`
                 : 'La ubicación no es cercana al punto requerido (máximo 50 metros).';
             }
+            if (tipo === 'INGRESO') {
+              setPendingIngresoCoords(coords);
+              setPendingIngresoWarning(warningMessage);
+              setIngresoComentario('');
+              setIngresoDialogVisible(true);
+              return;
+            }
             await executeRegister(tipo, coords, warningMessage);
           } catch (err) {
             setMessage(LOCATION_REQUIRED_MESSAGE);
           }
         };
 
-        const executeRegister = async (tipo, coords, warningMessage = '') => {
+        const executeRegister = async (tipo, coords, warningMessage = '', comentario = '') => {
           const usuarioAct = cuadrilla;
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][PAYLOAD_PREP]', {
@@ -440,7 +461,18 @@ export default function ViewAsistencia() {
           const todayLima = getLimaDate();
           const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
           const codEmp = usuarioAct;
-          const res = await registerAsistencia({ usuarioAct, codEmp, tipo, lat: coords?.latitude, lon: coords?.longitude, fechaAsistencia });
+          const estadoValidacion = warningMessage ? 0 : 1;
+          const res = await registerAsistencia({
+            usuarioAct,
+            codEmp,
+            tipo,
+            lat: coords?.latitude,
+            lon: coords?.longitude,
+            fechaAsistencia,
+            comentario: String(comentario || '').trim(),
+            estadoMarcacion: tipo === 'INGRESO' ? estadoValidacion : undefined,
+            estadoSalida: tipo === 'SALIDA' ? estadoValidacion : undefined,
+          });
           setLoading(false);
           if (res && !res.error) {
             setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);
@@ -454,6 +486,30 @@ export default function ViewAsistencia() {
 
         const handleViewCurrentLocation = () => {
           setLocationDialogVisible(true);
+        };
+
+        const closeIngresoDialog = () => {
+          setIngresoDialogVisible(false);
+          setIngresoComentario('');
+          setPendingIngresoCoords(null);
+          setPendingIngresoWarning('');
+        };
+
+        const confirmIngresoRegister = async () => {
+          const comentario = String(ingresoComentario || '').trim();
+          if (!comentario) {
+            setMessage('Debe ingresar el motivo del comentario para registrar INGRESO.');
+            return;
+          }
+          if (!pendingIngresoCoords) {
+            setMessage('No se pudo obtener la ubicación actual para registrar INGRESO.');
+            return;
+          }
+          setIngresoDialogVisible(false);
+          await executeRegister('INGRESO', pendingIngresoCoords, pendingIngresoWarning, comentario);
+          setIngresoComentario('');
+          setPendingIngresoCoords(null);
+          setPendingIngresoWarning('');
         };
 
         const handleCompareLocations = async () => {
@@ -517,7 +573,7 @@ export default function ViewAsistencia() {
             const coords = await getCurrentPosition();
             const lat = coords?.latitude;
             const lon = coords?.longitude;
-            if (!lat || !lon) {
+            if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
               setMessage('No hay coordenadas disponibles para abrir en mapa.');
               return;
             }
@@ -753,6 +809,30 @@ export default function ViewAsistencia() {
                 <Dialog.Actions>
                   <Button onPress={closeLocationDialog}>No</Button>
                   <Button onPress={openCurrentLocationInMap} loading={loadingCurrentLocation} disabled={loadingCurrentLocation}>Sí, ver en mapa</Button>
+                </Dialog.Actions>
+              </Dialog>
+
+              <Dialog visible={ingresoDialogVisible} onDismiss={closeIngresoDialog}>
+                <Dialog.Title>Comentario de ingreso</Dialog.Title>
+                <Dialog.Content>
+                  <Text style={{ marginBottom: 8 }}>Ingrese el motivo del comentario (obligatorio):</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={ingresoComentario}
+                    onChangeText={(value) => setIngresoComentario(String(value || '').slice(0, 250))}
+                    maxLength={250}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Escriba aquí el motivo..."
+                    textColor="#FFFFFF"
+                  />
+                  <Text style={{ marginTop: 6, textAlign: 'right', color: '#666' }}>
+                    {(ingresoComentario || '').length}/250
+                  </Text>
+                </Dialog.Content>
+                <Dialog.Actions>
+                  <Button onPress={closeIngresoDialog}>Cancelar</Button>
+                  <Button onPress={confirmIngresoRegister}>Aceptar</Button>
                 </Dialog.Actions>
               </Dialog>
             </Portal>

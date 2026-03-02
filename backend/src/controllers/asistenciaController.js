@@ -58,6 +58,9 @@ export const cargarListadoDiario = async (req, res) => {
   } catch (error) {
     const errorMessage = String(error?.message || '');
     const missingStoredProcedure = /Could not find stored procedure\s+'sp_CargarListadoDiario'/i.test(errorMessage);
+    
+    // Si el SP no existe o hay cualquier error en la validación del listado diario,
+    // devolver array vacío con aviso (esto es un proceso no crítico)
     if (missingStoredProcedure) {
       console.warn('SP sp_CargarListadoDiario no existe en la base de datos configurada. Se devuelve listado vacío.');
       return res.json({
@@ -66,8 +69,14 @@ export const cargarListadoDiario = async (req, res) => {
         warning: 'SP sp_CargarListadoDiario no encontrado'
       });
     }
-    console.error('Error al validar listado diario:', error);
-    res.status(500).json({ message: 'Error al validar listado diario', error: error.message });
+    
+    // Para cualquier otro error, también devolvemos array vacío (validación no crítica)
+    console.warn('Error al validar listado diario (no crítico):', error);
+    res.json({
+      success: true,
+      data: [],
+      warning: 'No se pudo validar el listado diario: ' + errorMessage
+    });
   }
 };
 

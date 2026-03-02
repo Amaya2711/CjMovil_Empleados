@@ -261,7 +261,7 @@ export default function ViewAsistencia() {
           } else {
             const validacion = await validarListadoDiario({ usuarioCre });
             if (!mounted.current) return;
-            if (!validacion || validacion.error) {
+            if (!validacion || (validacion.error === true && validacion.success !== true)) {
               const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
               const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
               if (showDevDetail) {

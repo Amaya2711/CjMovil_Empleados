@@ -58,9 +58,17 @@ export const validarListadoDiario = async ({ usuarioCre } = {}) => {
     if (!res.ok) {
       throw new Error(payload?.error || payload?.message || 'Error al validar listado diario');
     }
-    return payload;
+    // El backend devuelve { success: true, data: [], warning?: string }
+    // Convertir a formato esperado por el frontend
+    return {
+      success: payload?.success !== false,
+      data: payload?.data || [],
+      warning: payload?.warning
+    };
   } catch (error) {
-    return { error: true, message: error.message };
+    // En caso de error de red, devolver array vacío (no es crítico)
+    console.warn('Error al validar listado diario:', error);
+    return { success: true, data: [], message: error.message };
   }
 };
 

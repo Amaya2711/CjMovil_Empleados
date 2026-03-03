@@ -467,7 +467,7 @@ export default function ViewAsistencia() {
           const todayLima = getLimaDate();
           const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
           const codEmp = usuarioAct;
-          const estadoValidacion = warningMessage ? 0 : 1;
+          const estadoValidacion = 9;
           const res = await registerAsistencia({
             usuarioAct,
             codEmp,

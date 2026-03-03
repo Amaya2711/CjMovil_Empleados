@@ -46,6 +46,8 @@ export default function ViewAsistencia() {
   const [ingresoComentario, setIngresoComentario] = useState('');
   const [pendingIngresoCoords, setPendingIngresoCoords] = useState(null);
   const [pendingIngresoWarning, setPendingIngresoWarning] = useState('');
+  const [registerActionRunning, setRegisterActionRunning] = useState(false);
+  const [confirmIngresoLoading, setConfirmIngresoLoading] = useState(false);
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
 
@@ -388,6 +390,8 @@ export default function ViewAsistencia() {
         };
 
         const handleRegister = async (tipo) => {
+          if (registerActionRunning) return;
+          setRegisterActionRunning(true);
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][CLICK] Botón SALIDA presionado');
           }
@@ -432,6 +436,8 @@ export default function ViewAsistencia() {
             await executeRegister(tipo, coords, warningMessage);
           } catch (err) {
             setMessage(LOCATION_REQUIRED_MESSAGE);
+          } finally {
+            setRegisterActionRunning(false);
           }
         };
 
@@ -496,6 +502,7 @@ export default function ViewAsistencia() {
         };
 
         const confirmIngresoRegister = async () => {
+          if (confirmIngresoLoading || registerActionRunning) return;
           const comentario = String(ingresoComentario || '').trim();
           if (!comentario) {
             setMessage('Debe ingresar el motivo del comentario para registrar INGRESO.');
@@ -505,11 +512,16 @@ export default function ViewAsistencia() {
             setMessage('No se pudo obtener la ubicación actual para registrar INGRESO.');
             return;
           }
-          setIngresoDialogVisible(false);
-          await executeRegister('INGRESO', pendingIngresoCoords, pendingIngresoWarning, comentario);
-          setIngresoComentario('');
-          setPendingIngresoCoords(null);
-          setPendingIngresoWarning('');
+          setConfirmIngresoLoading(true);
+          try {
+            setIngresoDialogVisible(false);
+            await executeRegister('INGRESO', pendingIngresoCoords, pendingIngresoWarning, comentario);
+            setIngresoComentario('');
+            setPendingIngresoCoords(null);
+            setPendingIngresoWarning('');
+          } finally {
+            setConfirmIngresoLoading(false);
+          }
         };
 
         const handleCompareLocations = async () => {
@@ -770,11 +782,11 @@ export default function ViewAsistencia() {
                     </Card.Content>
                   </Card>
                   <View style={styles.buttonsRow}>
-                    <Button mode="contained" buttonColor="#43A047" onPress={() => handleRegister('INGRESO')} style={styles.actionButton} loading={loading}>
+                    <Button mode="contained" buttonColor="#43A047" onPress={() => handleRegister('INGRESO')} style={styles.actionButton} loading={loading || registerActionRunning} disabled={loading || registerActionRunning}>
                       INGRESO
                     </Button>
                     {SHOW_SALIDA_BUTTON && (
-                      <Button mode="contained" buttonColor="#FA8072" onPress={() => handleRegister('SALIDA')} style={styles.actionButton} loading={loading} disabled={loading}>
+                      <Button mode="contained" buttonColor="#FA8072" onPress={() => handleRegister('SALIDA')} style={styles.actionButton} loading={loading || registerActionRunning} disabled={loading || registerActionRunning}>
                         SALIDA
                       </Button>
                     )}
@@ -824,15 +836,16 @@ export default function ViewAsistencia() {
                     multiline
                     numberOfLines={4}
                     placeholder="Escriba aquí el motivo..."
-                    textColor="#FFFFFF"
+                    textColor="#231F36"
+                    style={styles.ingresoCommentInput}
                   />
                   <Text style={{ marginTop: 6, textAlign: 'right', color: '#666' }}>
                     {(ingresoComentario || '').length}/250
                   </Text>
                 </Dialog.Content>
                 <Dialog.Actions>
-                  <Button onPress={closeIngresoDialog}>Cancelar</Button>
-                  <Button onPress={confirmIngresoRegister}>Aceptar</Button>
+                  <Button onPress={closeIngresoDialog} disabled={confirmIngresoLoading}>Cancelar</Button>
+                  <Button onPress={confirmIngresoRegister} loading={confirmIngresoLoading} disabled={confirmIngresoLoading || registerActionRunning}>Aceptar</Button>
                 </Dialog.Actions>
               </Dialog>
             </Portal>
@@ -927,6 +940,7 @@ export default function ViewAsistencia() {
         compareButton: { marginBottom: 8 },
         deleteTestButton: { marginBottom: 8 },
         locationButton: { marginBottom: 12 },
+        ingresoCommentInput: { backgroundColor: '#fff' },
         cardGrid: { flex: 1, marginTop: 8, minHeight: 720, paddingVertical: 8 },
         chartBox: { marginBottom: 12, padding: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, backgroundColor: '#fff' },
         chartTitle: { fontSize: 16, fontWeight: '700', color: '#231F36', marginBottom: 10 },

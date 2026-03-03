@@ -604,6 +604,9 @@ export default function ViewAsistencia() {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
             const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const horaSalida = formatTime(item.HoraSalida ?? item.horaSalida ?? '');
+            const latitudSalida = (item.LatitudSalida ?? item.latitudSalida ?? '').toString();
+            const longitudSalida = (item.LongitudSalida ?? item.longitudSalida ?? '').toString();
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
             return (
               <View>
@@ -631,6 +634,27 @@ export default function ViewAsistencia() {
                       }}
                     />
                   </View>
+                  <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{horaSalida}</Text>
+                  <View style={[styles.cell, styles.cellAccionSalida]}> 
+                    <IconButton
+                      icon="magnify"
+                      size={20}
+                      onPress={async () => {
+                        const latSalida = item.LatitudSalida ?? item.latitudSalida ?? null;
+                        const lonSalida = item.LongitudSalida ?? item.longitudSalida ?? null;
+                        if (!latSalida || !lonSalida) {
+                          setMessage('Ubicación de salida no encontrada');
+                          return;
+                        }
+                        const url = `https://www.google.com/maps/search/?api=1&query=${latSalida},${lonSalida}`;
+                        try {
+                          await Linking.openURL(url);
+                        } catch (e) {
+                          setMessage('No se pudo abrir el mapa');
+                        }
+                      }}
+                    />
+                  </View>
                 </View>
               </View>
             );
@@ -644,8 +668,10 @@ export default function ViewAsistencia() {
           <View style={styles.headerRow}>
             <Text style={[styles.headerCell, styles.cellEstado]}>Estado</Text>
             <Text style={[styles.headerCell, styles.cellFecha]}>Fecha</Text>
-            <Text style={[styles.headerCell, styles.cellHora]}>Hora</Text>
-            <Text style={[styles.headerCell, styles.cellAccion]}></Text>
+            <Text style={[styles.headerCell, styles.cellHora]}>Ingreso</Text>
+            <View style={[styles.headerCell, styles.cellAccion]}></View>
+            <Text style={[styles.headerCell, styles.cellHoraSalida]}>HoraSalida</Text>
+            <View style={[styles.headerCell, styles.cellAccionSalida]}></View>
           </View>
         ), []);
 
@@ -956,9 +982,9 @@ export default function ViewAsistencia() {
         summaryValue: { fontSize: 16, fontWeight: '700', color: '#231F36' },
         filteredTitle: { fontSize: 14, fontWeight: '700', color: '#231F36', marginTop: 10, marginBottom: 8 },
         filteredHint: { fontSize: 13, color: '#666', marginTop: 10, marginBottom: 8 },
-        filteredListWrapper: { width: '100%' },
+        filteredListWrapper: { width: '100%', backgroundColor: '#fff', borderRadius: 4 },
         filteredListContent: { flexGrow: 1 },
-        filteredListInner: { width: '100%', minHeight: 180, maxHeight: 280 },
+        filteredListInner: { minWidth: 550, minHeight: 180, maxHeight: 280, paddingRight: 8 },
         filteredList: { width: '100%' },
         row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 0, borderBottomWidth: 1, borderColor: '#eee' },
         cell: { paddingHorizontal: 8, flexShrink: 0, fontSize: 12 },
@@ -967,7 +993,11 @@ export default function ViewAsistencia() {
         cellIdEstado: { minWidth: 82 },
         cellEstadoMarcacion: { minWidth: 140 },
         cellHora: { minWidth: 82 },
-        cellAccion: { width: 56, alignItems: 'center' },
+        cellHoraSalida: { minWidth: 82 },
+        cellLatitudSalida: { minWidth: 88 },
+        cellLongitudSalida: { minWidth: 88 },
+        cellAccion: { width: 48, alignItems: 'center', justifyContent: 'center' },
+        cellAccionSalida: { width: 48, alignItems: 'center', justifyContent: 'center' },
         headerRow: { flexDirection: 'row', paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#ddd' },
         headerCell: { paddingHorizontal: 8, fontWeight: '700', flexShrink: 0 },
         detalleCard: { backgroundColor: '#fff', padding: 10, borderRadius: 6, marginTop: 6, borderWidth: 1, borderColor: '#eee' },

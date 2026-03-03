@@ -104,9 +104,12 @@ export default function ViewAsistencia() {
             else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
             else d = new Date(val);
             if (isNaN(d.getTime())) return String(val);
-            const hh = String(d.getHours()).padStart(2, '0');
-            const mm = String(d.getMinutes()).padStart(2, '0');
-            const ss = String(d.getSeconds()).padStart(2, '0');
+            // Convertir a Lima (UTC-5)
+            // Se asume que el valor viene en UTC, se resta 5 horas para Lima
+            const limaDate = new Date(d.getTime() - (5 * 60 * 60 * 1000));
+            const hh = String(limaDate.getUTCHours()).padStart(2, '0');
+            const mm = String(limaDate.getUTCMinutes()).padStart(2, '0');
+            const ss = String(limaDate.getUTCSeconds()).padStart(2, '0');
             return `${hh}:${mm}:${ss}`;
           } catch (e) {
             return String(val);

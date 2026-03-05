@@ -570,6 +570,7 @@ export default function ViewAsistencia() {
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               quality: 0.7,
+              base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
               setIngresoFoto(result.assets[0]);
@@ -591,6 +592,7 @@ export default function ViewAsistencia() {
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               quality: 0.7,
+              base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
               setIngresoFoto(result.assets[0]);
@@ -623,7 +625,13 @@ export default function ViewAsistencia() {
             let nombreImagen = null;
             if (ingresoFoto && ingresoFoto.uri) {
               try {
-                imagenBase64 = await convertImageToBase64(ingresoFoto.uri);
+                imagenBase64 = ingresoFoto.base64 || null;
+                if (!imagenBase64) {
+                  imagenBase64 = await convertImageToBase64(ingresoFoto.uri);
+                }
+                if (!imagenBase64) {
+                  throw new Error('No se pudo obtener base64 de la imagen');
+                }
                 const d = getLimaDate();
                 const yyyy = String(d.getFullYear());
                 const mm = String(d.getMonth() + 1).padStart(2, '0');

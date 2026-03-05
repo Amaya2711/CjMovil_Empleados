@@ -95,98 +95,12 @@ export default function ViewAsistencia() {
         const formatTime = (val) => {
           if (!val && val !== 0) return '';
           try {
-            // El backend envía las horas ya convertidas a zona horaria Perú
-            // Caso 1: String en formato HH:mm:ss (lo más común del backend)
             if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}/.test(val)) {
-              const cleaned = val.split('.')[0]; // Eliminar milisegundos si existen
-              console.log(`[formatTime] String HH:mm:ss: ${val} → ${cleaned}`);
-              return cleaned;
+              return val.split('.')[0];
             }
-            
-            // Caso 2: Date object o timestamp (fallback si el servidor envía en otro formato)
-            let d;
-            if (val instanceof Date) {
-              d = val;
-            } else if (typeof val === 'number') {
-              d = new Date(val);
-            } else if (typeof val === 'string' && /^\d+$/.test(val)) {
-              d = new Date(Number(val));
-            } else {
-              // Intenta parsear como Date
-              d = new Date(val);
-            }
-            
-            if (isNaN(d.getTime())) {
-              console.warn(`[formatTime] No se pudo parsear: ${val} (tipo: ${typeof val})`);
-              return String(val);
-            }
-            
-            // Convertir a Lima (UTC-5) asumiendo que viene en UTC del servidor
-            // Contabilizar la zona horaria del dispositivo cliente
-            const utcMs = d.getTime() + (d.getTimezoneOffset() * 60 * 1000);
-            const limaMs = utcMs - (5 * 60 * 60 * 1000); // UTC-5
-            const limaDate = new Date(limaMs);
-            
-            const hh = String(limaDate.getUTCHours()).padStart(2, '0');
-            const mm = String(limaDate.getUTCMinutes()).padStart(2, '0');
-            const ss = String(limaDate.getUTCSeconds()).padStart(2, '0');
-            const result = `${hh}:${mm}:${ss}`;
-            
-            console.log(`[formatTime] Timestamp/Date: ${val} → ${result}`);
-            return result;
-          } catch (e) {
-            console.error(`[formatTime] Error: ${e.message}`, val);
             return String(val);
-          }
-        };
-        
-        // Wrapper de formatTime que usa serverTimezoneOffset para conversión correcta
-        const formatTimeWithServerOffset = (val, offset = serverTimezoneOffset) => {
-          if (!val && val !== 0) return '';
-          
-          // Si tenemos offset del servidor y el valor es un string HH:mm:ss, usar conversión explícita
-          if (typeof offset === 'number' && typeof val === 'string' && /^\d{2}:\d{2}:\d{2}/.test(val)) {
-            return convertServerTimeToLima(val, offset);
-          }
-          
-          // Si no tenemos offset, usar el formatTime estándar
-          return formatTime(val);
-        };
-        
-        // Convierte una hora string (HH:mm:ss) de la zona horaria del servidor a Lima (UTC-5)
-        const convertServerTimeToLima = (timeString, serverTimezoneOffset) => {
-          if (!timeString || typeof timeString !== 'string') return timeString;
-          if (!serverTimezoneOffset && serverTimezoneOffset !== 0) return timeString;
-          
-          try {
-            // Parse HH:mm:ss
-            const match = timeString.match(/^(\d{2}):(\d{2}):(\d{2})/);
-            if (!match) return timeString;
-            
-            let [, hours, minutes, seconds] = match.map(Number);
-            
-            // Diferencia entre zona del servidor y Lima (UTC-5)
-            // serverTimezoneOffset está en minutos
-            // Lima offset = -300 minutos (UTC-5)
-            const limaOffsetMinutes = -5 * 60; // -300
-            const diferencia = serverTimezoneOffset - limaOffsetMinutes;
-            
-            // Restar la diferencia en minutos
-            let totalMinutes = hours * 60 + minutes - diferencia / 60;
-            
-            // Ajustar si se pasa de día
-            if (totalMinutes < 0) totalMinutes += 24 * 60;
-            if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
-            
-            hours = Math.floor(totalMinutes / 60);
-            minutes = Math.floor(totalMinutes % 60);
-            
-            const result = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            console.log(`[convertServerTimeToLima] Servidor (offset ${serverTimezoneOffset}): ${timeString} → Lima: ${result}`);
-            return result;
           } catch (e) {
-            console.error(`[convertServerTimeToLima] Error:`, e.message);
-            return timeString;
+            return String(val);
           }
         };
 
@@ -307,108 +221,105 @@ export default function ViewAsistencia() {
 
         const fetchData = async () => {
           setLoading(true);
-          const idEmpleado = cuadrilla || codEmp || idusuario;
-          const todayLima = getLimaDate();
-          const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
+          try {
+            const idEmpleado = cuadrilla || codEmp || idusuario;
+            const todayLima = getLimaDate();
+            const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
 
-          const constanteOficinas = await getConstanteOficinas();
-          if (!mounted.current) return;
-          if (constanteOficinas && !constanteOficinas.error) {
-            const valorFinResponse =
-              constanteOficinas?.valorFin ??
-              constanteOficinas?.valorFinal ??
-              (Array.isArray(constanteOficinas?.data) && constanteOficinas.data[0]
-                ? (
-                    constanteOficinas.data[0].ValorFin ??
-                    constanteOficinas.data[0].valorFin ??
-                    constanteOficinas.data[0].ValorFinal ??
-                    constanteOficinas.data[0].valorFinal ??
-                    null
-                  )
-                : null);
-            setValorFin(valorFinResponse);
-          } else if (constanteOficinas?.error) {
-            setMessage(constanteOficinas?.message || 'No se pudo obtener ValorFin');
-          }
-
-          const usuarioCre = cuadrilla || idusuario || codEmp;
-          if (!usuarioCre) {
-            const technicalDetail = 'usuarioCre no disponible';
-            const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
-            if (showDevDetail) {
-              setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
-            }
-            setApiDebug(`listado-diario:${technicalDetail}`);
-            console.warn('Validación listado diario omitida:', technicalDetail);
-            setIdEstadoDiario(null);
-          } else {
-            const validacion = await validarListadoDiario({ usuarioCre });
+            const constanteOficinas = await getConstanteOficinas();
             if (!mounted.current) return;
-            if (!validacion || validacion.error) {
-              const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
+            if (constanteOficinas && !constanteOficinas.error) {
+              const valorFinResponse =
+                constanteOficinas?.valorFin ??
+                constanteOficinas?.valorFinal ??
+                (Array.isArray(constanteOficinas?.data) && constanteOficinas.data[0]
+                  ? (
+                      constanteOficinas.data[0].ValorFin ??
+                      constanteOficinas.data[0].valorFin ??
+                      constanteOficinas.data[0].ValorFinal ??
+                      constanteOficinas.data[0].valorFinal ??
+                      null
+                    )
+                  : null);
+              setValorFin(valorFinResponse);
+            } else if (constanteOficinas?.error) {
+              setMessage(constanteOficinas?.message || 'No se pudo obtener ValorFin');
+            }
+
+            const usuarioCre = cuadrilla || idusuario || codEmp;
+            if (!usuarioCre) {
+              const technicalDetail = 'usuarioCre no disponible';
               const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
               if (showDevDetail) {
                 setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
               }
               setApiDebug(`listado-diario:${technicalDetail}`);
-              console.warn('Validación listado diario falló:', technicalDetail);
+              console.warn('Validación listado diario omitida:', technicalDetail);
               setIdEstadoDiario(null);
             } else {
-              const listadoDiario = Array.isArray(validacion?.data)
-                ? validacion.data
-                : Array.isArray(validacion)
-                  ? validacion
-                  : [];
-              const primerRegistro = listadoDiario[0] || null;
-              const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
-              setIdEstadoDiario(estado);
+              const validacion = await validarListadoDiario({ usuarioCre });
+              if (!mounted.current) return;
+              if (!validacion || validacion.error) {
+                const technicalDetail = validacion?.message || 'No se pudo validar el listado diario';
+                const showDevDetail = typeof __DEV__ !== 'undefined' && __DEV__;
+                if (showDevDetail) {
+                  setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
+                }
+                setApiDebug(`listado-diario:${technicalDetail}`);
+                console.warn('Validación listado diario falló:', technicalDetail);
+                setIdEstadoDiario(null);
+              } else {
+                const listadoDiario = Array.isArray(validacion?.data)
+                  ? validacion.data
+                  : Array.isArray(validacion)
+                    ? validacion
+                    : [];
+                const primerRegistro = listadoDiario[0] || null;
+                const estado = primerRegistro?.IdEstado ?? primerRegistro?.idEstado ?? null;
+                setIdEstadoDiario(estado);
+              }
             }
-          }
 
-          const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
-          // response logged only when needed
-          if (!mounted.current) return;
-          // Manejo explícito y logging para depuración
-          if (!res) {
-            setMessage('Respuesta vacía del servidor');
-            setData([]);
-            setApiDebug('null');
-          } else if (res.error) {
-            setMessage(res.message || 'Error al obtener datos');
-            setData([]);
-            setApiDebug(JSON.stringify(res));
-          } else if (Array.isArray(res)) {
-            console.log('[ViewAsistencia] Datos recibidos del servidor:', res);
-            if (res.length > 0) {
-              console.log('[ViewAsistencia] Primer registro - Hora:', res[0].Hora ?? res[0].hora, 'HoraSalida:', res[0].HoraSalida ?? res[0].horaSalida);
+            const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
+            if (!mounted.current) return;
+            if (!res) {
+              setMessage('Respuesta vacía del servidor');
+              setData([]);
+              setApiDebug('null');
+            } else if (res.error) {
+              setMessage(res.message || 'Error al obtener datos');
+              setData([]);
+              setApiDebug(JSON.stringify(res));
+            } else if (Array.isArray(res)) {
+              console.log('[ViewAsistencia] Datos recibidos del servidor:', res);
+              if (res.length > 0) {
+                console.log('[ViewAsistencia] Primer registro - Hora:', res[0].Hora ?? res[0].hora, 'HoraSalida:', res[0].HoraSalida ?? res[0].horaSalida);
+              }
+              setData(res);
+              setApiDebug(`array:${res.length}`);
+            } else if (res.data && Array.isArray(res.data)) {
+              console.log('[ViewAsistencia] Datos recibidos del servidor:', res.data);
+              if (res.data.length > 0) {
+                console.log('[ViewAsistencia] Primer registro - Hora:', res.data[0].Hora ?? res.data[0].hora, 'HoraSalida:', res.data[0].HoraSalida ?? res.data[0].horaSalida);
+              }
+              setData(res.data);
+              setApiDebug(`payload.data:${res.data.length}`);
+            } else {
+              setData([]);
+              setApiDebug(JSON.stringify(res));
+              setMessage('Respuesta inesperada del servidor');
             }
-            setData(res);
-            setApiDebug(`array:${res.length}`);
-          } else if (res.data && Array.isArray(res.data)) {
-            console.log('[ViewAsistencia] Datos recibidos del servidor:', res.data);
-            if (res.data.length > 0) {
-              console.log('[ViewAsistencia] Primer registro - Hora:', res.data[0].Hora ?? res.data[0].hora, 'HoraSalida:', res.data[0].HoraSalida ?? res.data[0].horaSalida);
-            }
-            setData(res.data);
-            setApiDebug(`payload.data:${res.data.length}`);
-                    } else if (res.data && Array.isArray(res.data)) {
-                      console.log('[ViewAsistencia] Datos recibidos del servidor:', res.data);
-                      console.log('[ViewAsistencia] Server timezone offset:', res.serverTimezoneOffset, res.serverTimezone);
-                      if (res.data.length > 0) {
-                        console.log('[ViewAsistencia] Primer registro - Hora:', res.data[0].Hora ?? res.data[0].hora, 'HoraSalida:', res.data[0].HoraSalida ?? res.data[0].horaSalida);
-                      }
-                      if (typeof res.serverTimezoneOffset === 'number') {
-                        setServerTimezoneOffset(res.serverTimezoneOffset);
-                      }
-                      setData(res.data);
-                      setApiDebug(`payload.data:${res.data.length}`);
-          } else {
-            // Respuesta inesperada
+          } catch (error) {
+            if (!mounted.current) return;
+            console.error('[ViewAsistencia][fetchData] Error:', error);
             setData([]);
-            setApiDebug(JSON.stringify(res));
-            setMessage('Respuesta inesperada del servidor');
+            setMessage('No se pudo cargar asistencia en este momento.');
+            setApiDebug(String(error?.message || error));
+          } finally {
+            if (mounted.current) {
+              setLoading(false);
+            }
           }
-          setLoading(false);
         };
 
         useEffect(() => {
@@ -699,8 +610,8 @@ export default function ViewAsistencia() {
           try {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const hora = formatTimeWithServerOffset(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
-            const horaSalida = formatTimeWithServerOffset(item.HoraSalida ?? item.horaSalida ?? '');
+            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const horaSalida = formatTime(item.HoraSalida ?? item.horaSalida ?? '');
             const latitudSalida = (item.LatitudSalida ?? item.latitudSalida ?? '').toString();
             const longitudSalida = (item.LongitudSalida ?? item.longitudSalida ?? '').toString();
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
@@ -853,12 +764,12 @@ export default function ViewAsistencia() {
         const renderDebugItem = useCallback(({ item, index }) => (
           <Card style={{ marginBottom: 8 }}>
             <Card.Content>
-              <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTimeWithServerOffset(item.Hora ?? item.hora ?? '')}</Text>
+              <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTime(item.Hora ?? item.hora ?? '')}</Text>
               <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  Marcación: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
               <Text numberOfLines={2} ellipsizeMode="tail">{JSON.stringify(item)}</Text>
             </Card.Content>
           </Card>
-        ), [formatDateDayMonth, formatTimeWithServerOffset, serverTimezoneOffset]);
+        ), [formatDateDayMonth, formatTime]);
 
         return (
           <View style={styles.container}>
@@ -1120,4 +1031,3 @@ export default function ViewAsistencia() {
         return <RNText style={styles.timeValue}>{`${hh}:${mm}:${ss}`}</RNText>;
       }
 
-  const [serverTimezoneOffset, setServerTimezoneOffset] = useState(null); // en minutos

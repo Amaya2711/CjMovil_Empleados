@@ -92,8 +92,6 @@ export default function LoginScreen({ navigation }) {
           <Image source={CJTelecomLogo} style={styles.logo} resizeMode="contain" />
         </View>
 
-        <Card.Title title="Iniciar Sesion - Empleados" />
-
         <Card.Content>
           <TextInput
             label="Usuario"

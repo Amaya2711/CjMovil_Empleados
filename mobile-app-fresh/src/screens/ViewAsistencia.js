@@ -95,23 +95,47 @@ export default function ViewAsistencia() {
         const formatTime = (val) => {
           if (!val && val !== 0) return '';
           try {
-            // If already in HH:mm:ss or HH:mm:ss.SSS format, return HH:mm:ss
-            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(val)) {
-              return val.split('.')[0];
+            // El backend envía las horas ya convertidas a zona horaria Perú
+            // Caso 1: String en formato HH:mm:ss (lo más común del backend)
+            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}/.test(val)) {
+              const cleaned = val.split('.')[0]; // Eliminar milisegundos si existen
+              console.log(`[formatTime] String HH:mm:ss: ${val} → ${cleaned}`);
+              return cleaned;
             }
+            
+            // Caso 2: Date object o timestamp (fallback si el servidor envía en otro formato)
             let d;
-            if (val instanceof Date) d = val;
-            else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
-            else d = new Date(val);
-            if (isNaN(d.getTime())) return String(val);
-            // Convertir a Lima (UTC-5)
-            // Se asume que el valor viene en UTC, se resta 5 horas para Lima
-            const limaDate = new Date(d.getTime() - (5 * 60 * 60 * 1000));
+            if (val instanceof Date) {
+              d = val;
+            } else if (typeof val === 'number') {
+              d = new Date(val);
+            } else if (typeof val === 'string' && /^\d+$/.test(val)) {
+              d = new Date(Number(val));
+            } else {
+              // Intenta parsear como Date
+              d = new Date(val);
+            }
+            
+            if (isNaN(d.getTime())) {
+              console.warn(`[formatTime] No se pudo parsear: ${val} (tipo: ${typeof val})`);
+              return String(val);
+            }
+            
+            // Convertir a Lima (UTC-5) asumiendo que viene en UTC del servidor
+            // Contabilizar la zona horaria del dispositivo cliente
+            const utcMs = d.getTime() + (d.getTimezoneOffset() * 60 * 1000);
+            const limaMs = utcMs - (5 * 60 * 60 * 1000); // UTC-5
+            const limaDate = new Date(limaMs);
+            
             const hh = String(limaDate.getUTCHours()).padStart(2, '0');
             const mm = String(limaDate.getUTCMinutes()).padStart(2, '0');
             const ss = String(limaDate.getUTCSeconds()).padStart(2, '0');
-            return `${hh}:${mm}:${ss}`;
+            const result = `${hh}:${mm}:${ss}`;
+            
+            console.log(`[formatTime] Timestamp/Date: ${val} → ${result}`);
+            return result;
           } catch (e) {
+            console.error(`[formatTime] Error: ${e.message}`, val);
             return String(val);
           }
         };
@@ -304,9 +328,17 @@ export default function ViewAsistencia() {
             setData([]);
             setApiDebug(JSON.stringify(res));
           } else if (Array.isArray(res)) {
+            console.log('[ViewAsistencia] Datos recibidos del servidor:', res);
+            if (res.length > 0) {
+              console.log('[ViewAsistencia] Primer registro - Hora:', res[0].Hora ?? res[0].hora, 'HoraSalida:', res[0].HoraSalida ?? res[0].horaSalida);
+            }
             setData(res);
             setApiDebug(`array:${res.length}`);
           } else if (res.data && Array.isArray(res.data)) {
+            console.log('[ViewAsistencia] Datos recibidos del servidor:', res.data);
+            if (res.data.length > 0) {
+              console.log('[ViewAsistencia] Primer registro - Hora:', res.data[0].Hora ?? res.data[0].hora, 'HoraSalida:', res.data[0].HoraSalida ?? res.data[0].horaSalida);
+            }
             setData(res.data);
             setApiDebug(`payload.data:${res.data.length}`);
           } else {

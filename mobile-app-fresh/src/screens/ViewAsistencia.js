@@ -6,8 +6,8 @@ import { UserContext } from '../context/UserContext';
 import { getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useCallback, useMemo } from 'react';
-
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
 const getLimaDate = () => {
   try {
@@ -548,6 +548,36 @@ export default function ViewAsistencia() {
           setPendingIngresoWarning('');
         };
 
+        const convertImageToBase64 = async (asset) => {
+          if (asset?.base64) return asset.base64;
+
+          const sourceUri = asset?.uri || asset?.localUri;
+          if (!sourceUri) {
+            throw new Error('No existe URI de imagen para convertir');
+          }
+
+          let readUri = sourceUri;
+          let tempUri = null;
+
+          if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
+            tempUri = `${FileSystem.cacheDirectory}ingreso_${Date.now()}.jpg`;
+            await FileSystem.copyAsync({ from: sourceUri, to: tempUri });
+            readUri = tempUri;
+          }
+
+          try {
+            const base64String = await FileSystem.readAsStringAsync(readUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            if (!base64String) throw new Error('Base64 vacío');
+            return base64String;
+          } finally {
+            if (tempUri) {
+              await FileSystem.deleteAsync(tempUri, { idempotent: true });
+            }
+          }
+        };
+
         const tomarFotoIngreso = async () => {
           try {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -617,15 +647,11 @@ export default function ViewAsistencia() {
           }
           setConfirmIngresoLoading(true);
           try {
-            setIngresoDialogVisible(false);
             let imagenBase64 = null;
             let nombreImagen = null;
-            if (ingresoFoto && ingresoFoto.uri) {
+            if (ingresoFoto && (ingresoFoto.uri || ingresoFoto.localUri)) {
               try {
-                imagenBase64 = ingresoFoto.base64 || null;
-                if (!imagenBase64) {
-                  throw new Error('No se recibió base64 desde el selector de imágenes');
-                }
+                imagenBase64 = await convertImageToBase64(ingresoFoto);
                 const d = getLimaDate();
                 const yyyy = String(d.getFullYear());
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -634,11 +660,12 @@ export default function ViewAsistencia() {
                 nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
               } catch (error) {
                 console.error('[confirmIngresoRegister] Error al convertir imagen:', error);
-                setMessage('Error al procesar la imagen');
+                setMessage('Error al procesar la imagen. Intente con otra foto.');
                 return;
               }
             }
             await executeRegister('INGRESO', pendingIngresoCoords, pendingIngresoWarning, comentario, imagenBase64, nombreImagen);
+            setIngresoDialogVisible(false);
             setIngresoComentario('');
             setIngresoFoto(null);
             setPendingIngresoCoords(null);

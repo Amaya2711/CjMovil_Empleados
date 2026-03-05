@@ -6,7 +6,6 @@ import { UserContext } from '../context/UserContext';
 import { getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { useCallback, useMemo } from 'react';
 
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
@@ -549,16 +548,6 @@ export default function ViewAsistencia() {
           setPendingIngresoWarning('');
         };
 
-        const convertImageToBase64 = async (imageUri) => {
-          try {
-            const base64String = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
-            return base64String;
-          } catch (error) {
-            console.error('[convertImageToBase64] Error:', error);
-            throw error;
-          }
-        };
-
         const tomarFotoIngreso = async () => {
           try {
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -573,6 +562,10 @@ export default function ViewAsistencia() {
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
+              if (!result.assets[0]?.base64) {
+                setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
+                return;
+              }
               setIngresoFoto(result.assets[0]);
             }
           } catch (error) {
@@ -595,6 +588,10 @@ export default function ViewAsistencia() {
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
+              if (!result.assets[0]?.base64) {
+                setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
+                return;
+              }
               setIngresoFoto(result.assets[0]);
             }
           } catch (error) {
@@ -627,10 +624,7 @@ export default function ViewAsistencia() {
               try {
                 imagenBase64 = ingresoFoto.base64 || null;
                 if (!imagenBase64) {
-                  imagenBase64 = await convertImageToBase64(ingresoFoto.uri);
-                }
-                if (!imagenBase64) {
-                  throw new Error('No se pudo obtener base64 de la imagen');
+                  throw new Error('No se recibió base64 desde el selector de imágenes');
                 }
                 const d = getLimaDate();
                 const yyyy = String(d.getFullYear());

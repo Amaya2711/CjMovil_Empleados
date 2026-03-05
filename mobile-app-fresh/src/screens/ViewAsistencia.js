@@ -588,7 +588,7 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.7,
+              quality: 0.3,
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -596,6 +596,7 @@ export default function ViewAsistencia() {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
                 return;
               }
+              console.log('[tomarFotoIngreso] Foto capturada - Dimensiones:', result.assets[0].width, 'x', result.assets[0].height);
               setIngresoFoto(result.assets[0]);
             }
           } catch (error) {
@@ -614,7 +615,7 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.7,
+              quality: 0.3,
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -622,6 +623,7 @@ export default function ViewAsistencia() {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
                 return;
               }
+              console.log('[seleccionarImagenIngreso] Imagen seleccionada - Dimensiones:', result.assets[0].width, 'x', result.assets[0].height);
               setIngresoFoto(result.assets[0]);
             }
           } catch (error) {
@@ -651,7 +653,17 @@ export default function ViewAsistencia() {
             let nombreImagen = null;
             if (ingresoFoto && (ingresoFoto.uri || ingresoFoto.localUri)) {
               try {
+                console.log('[confirmIngresoRegister] Iniciando conversión de imagen...');
                 imagenBase64 = await convertImageToBase64(ingresoFoto);
+                const sizeInKB = (imagenBase64.length * 0.75 / 1024).toFixed(2);
+                console.log('[confirmIngresoRegister] Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB');
+                
+                if (imagenBase64.length > 25 * 1024 * 1024) {
+                  console.warn('[confirmIngresoRegister] ADVERTENCIA: Imagen muy grande (>25MB base64)');
+                  setMessage('La imagen es demasiado grande. Intente con una foto de menor resolución.');
+                  return;
+                }
+                
                 const d = getLimaDate();
                 const yyyy = String(d.getFullYear());
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -660,6 +672,7 @@ export default function ViewAsistencia() {
                 nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
               } catch (error) {
                 console.error('[confirmIngresoRegister] Error al convertir imagen:', error);
+                console.error('[confirmIngresoRegister] Error completo:', JSON.stringify(error));
                 setMessage('Error al procesar la imagen. Intente con otra foto.');
                 return;
               }

@@ -1,10 +1,12 @@
 import React, { useContext, useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText } from 'react-native';
+import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, Text as RNText, Image } from 'react-native';
 import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, MD3Colors, TextInput } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { UserContext } from '../context/UserContext';
 import { getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useCallback, useMemo } from 'react';
 
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
@@ -44,6 +46,7 @@ export default function ViewAsistencia() {
   const [currentCoords, setCurrentCoords] = useState(null);
   const [ingresoDialogVisible, setIngresoDialogVisible] = useState(false);
   const [ingresoComentario, setIngresoComentario] = useState('');
+  const [ingresoFoto, setIngresoFoto] = useState(null);
   const [pendingIngresoCoords, setPendingIngresoCoords] = useState(null);
   const [pendingIngresoWarning, setPendingIngresoWarning] = useState('');
   const [registerActionRunning, setRegisterActionRunning] = useState(false);
@@ -471,6 +474,7 @@ export default function ViewAsistencia() {
               setPendingIngresoCoords(coords);
               setPendingIngresoWarning(warningMessage);
               setIngresoComentario('');
+              setIngresoFoto(null);
               setIngresoDialogVisible(true);
               return;
             }
@@ -482,7 +486,7 @@ export default function ViewAsistencia() {
           }
         };
 
-        const executeRegister = async (tipo, coords, warningMessage = '', comentario = '') => {
+        const executeRegister = async (tipo, coords, warningMessage = '', comentario = '', imagenBase64 = null, nombreImagen = null) => {
           const usuarioAct = cuadrilla;
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][PAYLOAD_PREP]', {
@@ -519,6 +523,8 @@ export default function ViewAsistencia() {
             comentario: String(comentario || '').trim(),
             estadoMarcacion: tipo === 'INGRESO' ? estadoValidacion : undefined,
             estadoSalida: tipo === 'SALIDA' ? estadoValidacion : undefined,
+                      imagenBase64: imagenBase64 || undefined,
+                      nombreImagen: nombreImagen || undefined,
           });
           setLoading(false);
           if (res && !res.error) {
@@ -538,8 +544,61 @@ export default function ViewAsistencia() {
         const closeIngresoDialog = () => {
           setIngresoDialogVisible(false);
           setIngresoComentario('');
+          setIngresoFoto(null);
           setPendingIngresoCoords(null);
           setPendingIngresoWarning('');
+        };
+
+        const convertImageToBase64 = async (imageUri) => {
+          try {
+            const base64String = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
+            return base64String;
+          } catch (error) {
+            console.error('[convertImageToBase64] Error:', error);
+            throw error;
+          }
+        };
+
+        const tomarFotoIngreso = async () => {
+          try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              setMessage('Se requiere permiso de camara para tomar foto');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: false,
+              quality: 0.7,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              setIngresoFoto(result.assets[0]);
+            }
+          } catch (error) {
+            console.error('[tomarFotoIngreso] Error:', error);
+            setMessage('Error al tomar foto');
+          }
+        };
+
+        const seleccionarImagenIngreso = async () => {
+          try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              setMessage('Se requiere permiso de galeria para seleccionar foto');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: false,
+              quality: 0.7,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              setIngresoFoto(result.assets[0]);
+            }
+          } catch (error) {
+            console.error('[seleccionarImagenIngreso] Error:', error);
+            setMessage('Error al seleccionar imagen');
+          }
         };
 
         const confirmIngresoRegister = async () => {
@@ -549,15 +608,37 @@ export default function ViewAsistencia() {
             setMessage('Debe ingresar el motivo del comentario para registrar INGRESO.');
             return;
           }
+          if (!ingresoFoto) {
+            setMessage('Debe capturar o cargar una foto de ingreso (obligatorio).');
+            return;
+          }
           if (!pendingIngresoCoords) {
-            setMessage('No se pudo obtener la ubicación actual para registrar INGRESO.');
+            setMessage('No se pudo obtener la ubicacion actual para registrar INGRESO.');
             return;
           }
           setConfirmIngresoLoading(true);
           try {
             setIngresoDialogVisible(false);
-            await executeRegister('INGRESO', pendingIngresoCoords, pendingIngresoWarning, comentario);
+            let imagenBase64 = null;
+            let nombreImagen = null;
+            if (ingresoFoto && ingresoFoto.uri) {
+              try {
+                imagenBase64 = await convertImageToBase64(ingresoFoto.uri);
+                const d = getLimaDate();
+                const yyyy = String(d.getFullYear());
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const codEmpArchivo = String(cuadrilla || codEmp || idusuario || 'SINCOD').trim();
+                nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
+              } catch (error) {
+                console.error('[confirmIngresoRegister] Error al convertir imagen:', error);
+                setMessage('Error al procesar la imagen');
+                return;
+              }
+            }
+            await executeRegister('INGRESO', pendingIngresoCoords, pendingIngresoWarning, comentario, imagenBase64, nombreImagen);
             setIngresoComentario('');
+            setIngresoFoto(null);
             setPendingIngresoCoords(null);
             setPendingIngresoWarning('');
           } finally {
@@ -913,10 +994,49 @@ export default function ViewAsistencia() {
                   <Text style={{ marginTop: 6, textAlign: 'right', color: '#666' }}>
                     {(ingresoComentario || '').length}/250
                   </Text>
+                  
+                  <View style={{ marginTop: 16, marginBottom: 8 }}>
+                    <Text style={{ marginBottom: 8, fontWeight: '600' }}>Foto de ingreso (obligatoria):</Text>
+                    {ingresoFoto ? (
+                      <View style={{ marginBottom: 8 }}>
+                        <Image
+                          source={{ uri: ingresoFoto.uri }}
+                          style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 8 }}
+                        />
+                        <Text style={{ color: '#4CAF50', marginBottom: 8 }}>Foto cargada correctamente</Text>
+                        <Button
+                          mode="outlined"
+                          onPress={() => setIngresoFoto(null)}
+                          disabled={confirmIngresoLoading}
+                          style={{ marginBottom: 8 }}
+                        >
+                          Cambiar foto
+                        </Button>
+                      </View>
+                    ) : (
+                      <View style={{ marginBottom: 8 }}>
+                        <Button
+                          mode="contained"
+                          onPress={tomarFotoIngreso}
+                          disabled={confirmIngresoLoading}
+                          style={{ marginBottom: 8 }}
+                        >
+                          Tomar foto con camara
+                        </Button>
+                        <Button
+                          mode="outlined"
+                          onPress={seleccionarImagenIngreso}
+                          disabled={confirmIngresoLoading}
+                        >
+                          Cargar imagen de galeria
+                        </Button>
+                      </View>
+                    )}
+                  </View>
                 </Dialog.Content>
                 <Dialog.Actions>
                   <Button onPress={closeIngresoDialog} disabled={confirmIngresoLoading}>Cancelar</Button>
-                  <Button onPress={confirmIngresoRegister} loading={confirmIngresoLoading} disabled={confirmIngresoLoading || registerActionRunning}>Aceptar</Button>
+                  <Button onPress={confirmIngresoRegister} loading={confirmIngresoLoading} disabled={confirmIngresoLoading || registerActionRunning || !ingresoFoto}>Aceptar</Button>
                 </Dialog.Actions>
               </Dialog>
             </Portal>

@@ -1,4 +1,5 @@
 import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService } from '../services/asistenciaService.js';
+import { uploadImageSafely } from '../services/sharePointService.js';
 
 export const getAsistencia = async (req, res) => {
   try {
@@ -16,8 +17,8 @@ export const getAsistencia = async (req, res) => {
 
 export const registerAsistencia = async (req, res) => {
   try {
-    const { usuarioAct, codEmp, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida } = req.body || {};
-    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
+    const { usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida, imagenBase64, nombreImagen } = req.body || {};
+    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida, tieneImagen: !!imagenBase64 });
     if (String(tipo || '').toUpperCase() === 'SALIDA') {
       console.log('[SALIDA][BODY]', {
         usuarioAct,
@@ -37,8 +38,29 @@ export const registerAsistencia = async (req, res) => {
       return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });
     }
 
+    const tipoNormalizado = String(tipo || '').trim().toUpperCase() === 'SALIDA' ? 'SALIDA' : 'INGRESO';
+    const codEmpArchivo = String(codEmp || usuarioActValue || '').trim() || 'SINCOD';
+    const fechaBase = fechaAsistencia ? new Date(fechaAsistencia) : new Date();
+    const fechaArchivo = Number.isNaN(fechaBase.getTime())
+      ? new Date()
+      : fechaBase;
+    const yyyy = String(fechaArchivo.getFullYear());
+    const mm = String(fechaArchivo.getMonth() + 1).padStart(2, '0');
+    const dd = String(fechaArchivo.getDate()).padStart(2, '0');
+    const nombreImagenFinal = `${tipoNormalizado}_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
+
     const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
-    res.json({ success: true, result });
+    let uploadResult = null;
+    if (imagenBase64) {
+      try {
+        uploadResult = await uploadImageSafely(imagenBase64, nombreImagenFinal);
+        console.log('[registerAsistencia][UPLOAD_RESULT]', uploadResult);
+      } catch (error) {
+        console.error('[registerAsistencia][UPLOAD_ERROR]', error.message);
+        uploadResult = { success: false, error: error.message, pendingUpload: true };
+      }
+    }
+    res.json({ success: true, result, imageUpload: uploadResult });
   } catch (error) {
     console.error('Error al registrar asistencia:', error);
     res.status(500).json({ message: 'Error al registrar asistencia', error: error.message });

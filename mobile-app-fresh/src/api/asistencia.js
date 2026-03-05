@@ -20,7 +20,7 @@ export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
   }
 };
 
-export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida } = {}) => {
+export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida, imagenBase64, nombreImagen } = {}) => {
   try {
     const url = `${BASE_URL}${API_BASE}/register`;
     const body = { usuarioAct, codEmp, tipo, fechaAsistencia };
@@ -37,7 +37,13 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
     if (typeof estadoSalida !== 'undefined') {
       body.estadoSalida = estadoSalida;
     }
-    console.log('[registerAsistencia][REQUEST]', { url, body });
+    if (typeof imagenBase64 !== 'undefined') {
+      body.imagenBase64 = imagenBase64;
+    }
+    if (typeof nombreImagen !== 'undefined') {
+      body.nombreImagen = nombreImagen;
+    }
+    console.log('[registerAsistencia][REQUEST]', { url, body: { ...body, imagenBase64: body.imagenBase64 ? '...(base64)...' : undefined } });
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

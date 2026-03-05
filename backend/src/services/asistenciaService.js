@@ -50,17 +50,37 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
   request.input('FechaAsistencia', sql.Date, fecha);
   const result = await request.execute('sp_Asistencia_ListarMes');
   const rows = result.recordset || [];
-  return rows.map((row) => ({
-    ...row,
-    Estado:
-      row.Estado ??
-      row.estado ??
-      row.EstadoMarcacion ??
-      row.estadoMarcacion ??
-      row.IdEstado ??
-      row.idEstado ??
-      '',
-  }));
+  return rows.map((row) => {
+    // Normalizar TiempoTrabajado: convertir a string en formato HH:mm:ss si es necesario
+    let tiempoTrabajadoFormatted = '';
+    if (row.TiempoTrabajado || row.tiempoTrabajado) {
+      const tiempoVal = row.TiempoTrabajado ?? row.tiempoTrabajado;
+      if (typeof tiempoVal === 'string' && /^\d{2}:\d{2}:\d{2}/.test(tiempoVal)) {
+        tiempoTrabajadoFormatted = tiempoVal.split('.')[0];
+      } else if (tiempoVal instanceof Date || typeof tiempoVal === 'number') {
+        const date = tiempoVal instanceof Date ? tiempoVal : new Date(tiempoVal);
+        if (!isNaN(date.getTime())) {
+          const hh = String(date.getHours()).padStart(2, '0');
+          const mm = String(date.getMinutes()).padStart(2, '0');
+          const ss = String(date.getSeconds()).padStart(2, '0');
+          tiempoTrabajadoFormatted = `${hh}:${mm}:${ss}`;
+        }
+      }
+    }
+    
+    return {
+      ...row,
+      TiempoTrabajado: tiempoTrabajadoFormatted,
+      Estado:
+        row.Estado ??
+        row.estado ??
+        row.EstadoMarcacion ??
+        row.estadoMarcacion ??
+        row.IdEstado ??
+        row.idEstado ??
+        '',
+    };
+  });
 };
 
 export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida }) => {

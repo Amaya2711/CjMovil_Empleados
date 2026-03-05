@@ -646,6 +646,7 @@ export default function ViewAsistencia() {
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
             const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
             const horaSalida = formatTime(item.HoraSalida ?? item.horaSalida ?? '');
+            const tiempoTrabajado = formatTime(item.TiempoTrabajado ?? item.tiempoTrabajado ?? '');
             const latitudSalida = (item.LatitudSalida ?? item.latitudSalida ?? '').toString();
             const longitudSalida = (item.LongitudSalida ?? item.longitudSalida ?? '').toString();
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
@@ -676,6 +677,7 @@ export default function ViewAsistencia() {
                     />
                   </View>
                   <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{horaSalida}</Text>
+                  <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{tiempoTrabajado}</Text>
                   <View style={[styles.cell, styles.cellAccionSalida]}> 
                     <IconButton
                       icon="magnify"
@@ -711,7 +713,8 @@ export default function ViewAsistencia() {
             <Text style={[styles.headerCell, styles.cellFecha]}>Fecha</Text>
             <Text style={[styles.headerCell, styles.cellHora]}>Ingreso</Text>
             <View style={[styles.headerCell, styles.cellAccion]}></View>
-            <Text style={[styles.headerCell, styles.cellHoraSalida]}>HoraSalida</Text>
+            <Text style={[styles.headerCell, styles.cellHoraSalida]}>Salida</Text>
+            <Text style={[styles.headerCell, styles.cellHoraSalida]}>Tiempo Trab.</Text>
             <View style={[styles.headerCell, styles.cellAccionSalida]}></View>
           </View>
         ), []);
@@ -800,6 +803,7 @@ export default function ViewAsistencia() {
             <Card.Content>
               <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTime(item.Hora ?? item.hora ?? '')}</Text>
               <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  Marcación: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
+              <Text>{`Ingreso: ${formatTime(item.Hora ?? item.hora ?? '')} | Salida: ${formatTime(item.HoraSalida ?? item.horaSalida ?? '')} | Tiempo Trabajado: ${formatTime(item.TiempoTrabajado ?? item.tiempoTrabajado ?? '')}`}</Text>
               <Text numberOfLines={2} ellipsizeMode="tail">{JSON.stringify(item)}</Text>
             </Card.Content>
           </Card>

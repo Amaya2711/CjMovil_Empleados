@@ -139,6 +139,56 @@ export default function ViewAsistencia() {
             return String(val);
           }
         };
+        
+        // Wrapper de formatTime que usa serverTimezoneOffset para conversión correcta
+        const formatTimeWithServerOffset = (val, offset = serverTimezoneOffset) => {
+          if (!val && val !== 0) return '';
+          
+          // Si tenemos offset del servidor y el valor es un string HH:mm:ss, usar conversión explícita
+          if (typeof offset === 'number' && typeof val === 'string' && /^\d{2}:\d{2}:\d{2}/.test(val)) {
+            return convertServerTimeToLima(val, offset);
+          }
+          
+          // Si no tenemos offset, usar el formatTime estándar
+          return formatTime(val);
+        };
+        
+        // Convierte una hora string (HH:mm:ss) de la zona horaria del servidor a Lima (UTC-5)
+        const convertServerTimeToLima = (timeString, serverTimezoneOffset) => {
+          if (!timeString || typeof timeString !== 'string') return timeString;
+          if (!serverTimezoneOffset && serverTimezoneOffset !== 0) return timeString;
+          
+          try {
+            // Parse HH:mm:ss
+            const match = timeString.match(/^(\d{2}):(\d{2}):(\d{2})/);
+            if (!match) return timeString;
+            
+            let [, hours, minutes, seconds] = match.map(Number);
+            
+            // Diferencia entre zona del servidor y Lima (UTC-5)
+            // serverTimezoneOffset está en minutos
+            // Lima offset = -300 minutos (UTC-5)
+            const limaOffsetMinutes = -5 * 60; // -300
+            const diferencia = serverTimezoneOffset - limaOffsetMinutes;
+            
+            // Restar la diferencia en minutos
+            let totalMinutes = hours * 60 + minutes - diferencia / 60;
+            
+            // Ajustar si se pasa de día
+            if (totalMinutes < 0) totalMinutes += 24 * 60;
+            if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
+            
+            hours = Math.floor(totalMinutes / 60);
+            minutes = Math.floor(totalMinutes % 60);
+            
+            const result = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            console.log(`[convertServerTimeToLima] Servidor (offset ${serverTimezoneOffset}): ${timeString} → Lima: ${result}`);
+            return result;
+          } catch (e) {
+            console.error(`[convertServerTimeToLima] Error:`, e.message);
+            return timeString;
+          }
+        };
 
         const formatEstadoLabel = (val) => {
           const raw = val === null || typeof val === 'undefined' ? '' : String(val).trim();
@@ -341,6 +391,17 @@ export default function ViewAsistencia() {
             }
             setData(res.data);
             setApiDebug(`payload.data:${res.data.length}`);
+                    } else if (res.data && Array.isArray(res.data)) {
+                      console.log('[ViewAsistencia] Datos recibidos del servidor:', res.data);
+                      console.log('[ViewAsistencia] Server timezone offset:', res.serverTimezoneOffset, res.serverTimezone);
+                      if (res.data.length > 0) {
+                        console.log('[ViewAsistencia] Primer registro - Hora:', res.data[0].Hora ?? res.data[0].hora, 'HoraSalida:', res.data[0].HoraSalida ?? res.data[0].horaSalida);
+                      }
+                      if (typeof res.serverTimezoneOffset === 'number') {
+                        setServerTimezoneOffset(res.serverTimezoneOffset);
+                      }
+                      setData(res.data);
+                      setApiDebug(`payload.data:${res.data.length}`);
           } else {
             // Respuesta inesperada
             setData([]);
@@ -638,8 +699,8 @@ export default function ViewAsistencia() {
           try {
             const uniqueId = String(item.IdAsistencia ?? item.Id ?? `${item.IdEmpleado ?? ''}_${item.FechaAsistencia ?? ''}_${item.Hora ?? item.hora ?? ''}`);
             const fecha = formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? item.Date ?? '');
-            const hora = formatTime(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
-            const horaSalida = formatTime(item.HoraSalida ?? item.horaSalida ?? '');
+            const hora = formatTimeWithServerOffset(item.Hora ?? item.hora ?? item.HoraCreacion ?? item.horaCreacion ?? '');
+            const horaSalida = formatTimeWithServerOffset(item.HoraSalida ?? item.horaSalida ?? '');
             const latitudSalida = (item.LatitudSalida ?? item.latitudSalida ?? '').toString();
             const longitudSalida = (item.LongitudSalida ?? item.longitudSalida ?? '').toString();
             const estado = formatEstadoLabel(item.Estado ?? item.estado ?? '');
@@ -792,12 +853,12 @@ export default function ViewAsistencia() {
         const renderDebugItem = useCallback(({ item, index }) => (
           <Card style={{ marginBottom: 8 }}>
             <Card.Content>
-              <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTime(item.Hora ?? item.hora ?? '')}</Text>
+              <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTimeWithServerOffset(item.Hora ?? item.hora ?? '')}</Text>
               <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  Marcación: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
               <Text numberOfLines={2} ellipsizeMode="tail">{JSON.stringify(item)}</Text>
             </Card.Content>
           </Card>
-        ), [formatDateDayMonth, formatTime]);
+        ), [formatDateDayMonth, formatTimeWithServerOffset, serverTimezoneOffset]);
 
         return (
           <View style={styles.container}>
@@ -1058,3 +1119,5 @@ export default function ViewAsistencia() {
         const ss = String(t.getSeconds()).padStart(2, '0');
         return <RNText style={styles.timeValue}>{`${hh}:${mm}:${ss}`}</RNText>;
       }
+
+  const [serverTimezoneOffset, setServerTimezoneOffset] = useState(null); // en minutos

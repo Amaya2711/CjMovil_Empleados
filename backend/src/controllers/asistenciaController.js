@@ -7,7 +7,15 @@ export const getAsistencia = async (req, res) => {
     // El parámetro que espera el SP es IdEmpleado
     const idEmpleado = codEmp;
     const rows = await getAsistenciaService(idEmpleado, fechaAsistencia);
-    res.json(rows);
+    // Enviar el offset de zona horaria del servidor para que el cliente pueda interpretar las horas correctamente
+    const serverTimezoneOffset = -(new Date().getTimezoneOffset()); // en minutos
+    const response = {
+      data: rows,
+      serverTimezoneOffset: serverTimezoneOffset,
+      serverTimezone: `UTC${serverTimezoneOffset > 0 ? '+' : ''}${serverTimezoneOffset / 60}`
+    };
+    console.log(`[getAsistencia] Enviando ${rows.length} registros. Zona horaria del servidor: ${response.serverTimezone}`);
+    res.json(response);
   } catch (error) {
     console.error('Error al obtener asistencia:', error);
     res.status(500).json({ message: 'Error al obtener asistencia', error: error.message });
@@ -38,7 +46,13 @@ export const registerAsistencia = async (req, res) => {
     }
 
     const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
-    res.json({ success: true, result });
+    const serverTimezoneOffset = -(new Date().getTimezoneOffset()); // en minutos
+    res.json({ 
+      success: true, 
+      result,
+      serverTimezoneOffset: serverTimezoneOffset,
+      serverTimezone: `UTC${serverTimezoneOffset > 0 ? '+' : ''}${serverTimezoneOffset / 60}`
+    });
   } catch (error) {
     console.error('Error al registrar asistencia:', error);
     res.status(500).json({ message: 'Error al registrar asistencia', error: error.message });

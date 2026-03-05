@@ -677,7 +677,6 @@ export default function ViewAsistencia() {
                     />
                   </View>
                   <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{horaSalida}</Text>
-                  <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{tiempoTrabajado}</Text>
                   <View style={[styles.cell, styles.cellAccionSalida]}> 
                     <IconButton
                       icon="magnify"
@@ -698,6 +697,7 @@ export default function ViewAsistencia() {
                       }}
                     />
                   </View>
+                  <Text style={[styles.cell, styles.cellHoraSalida, { color: '#000' }]}>{tiempoTrabajado}</Text>
                 </View>
               </View>
             );
@@ -714,8 +714,8 @@ export default function ViewAsistencia() {
             <Text style={[styles.headerCell, styles.cellHora]}>Ingreso</Text>
             <View style={[styles.headerCell, styles.cellAccion]}></View>
             <Text style={[styles.headerCell, styles.cellHoraSalida]}>Salida</Text>
-            <Text style={[styles.headerCell, styles.cellHoraSalida]}>Tiempo Trab.</Text>
             <View style={[styles.headerCell, styles.cellAccionSalida]}></View>
+            <Text style={[styles.headerCell, styles.cellHoraSalida]}>Tiempo Trab.</Text>
           </View>
         ), []);
 

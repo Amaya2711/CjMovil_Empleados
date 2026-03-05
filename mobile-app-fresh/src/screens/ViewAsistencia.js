@@ -62,6 +62,15 @@ export default function ViewAsistencia() {
   const formatDate = (val) => {
     if (!val && val !== 0) return '';
     try {
+      // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversión de zona horaria
+      if (typeof val === 'string') {
+        const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+          const [, yyyy, mm, dd] = match;
+          return `${dd}-${mm}-${yyyy}`;
+        }
+      }
+      
       let d;
       if (val instanceof Date) d = val;
       else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
@@ -79,6 +88,15 @@ export default function ViewAsistencia() {
         const formatDateDayMonth = (val) => {
           if (!val && val !== 0) return '';
           try {
+            // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversión de zona horaria
+            if (typeof val === 'string') {
+              const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+              if (match) {
+                const [, , mm, dd] = match;
+                return `${dd}-${mm}`;
+              }
+            }
+            
             let d;
             if (val instanceof Date) d = val;
             else if (typeof val === 'number' || /^\d+$/.test(String(val))) d = new Date(Number(val));
@@ -95,12 +113,28 @@ export default function ViewAsistencia() {
         const formatTime = (val) => {
           if (!val && val !== 0) return '';
           try {
-            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}/.test(val)) {
-              return val.split('.')[0];
+            if (typeof val === 'string') {
+              // Si ya viene en formato HH:mm:ss o HH:mm:ss.SSS
+              const timeMatch = val.match(/(\d{2}):(\d{2}):(\d{2})/);
+              if (timeMatch) {
+                return `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}`;
+              }
+              // Si es un ISO string completo, extraer solo la hora
+              const isoMatch = val.match(/T(\d{2}):(\d{2}):(\d{2})/);
+              if (isoMatch) {
+                return `${isoMatch[1]}:${isoMatch[2]}:${isoMatch[3]}`;
+              }
             }
-            return String(val);
+            // Si es Date, extraer hora local
+            if (val instanceof Date && !isNaN(val.getTime())) {
+              const hh = String(val.getHours()).padStart(2, '0');
+              const mm = String(val.getMinutes()).padStart(2, '0');
+              const ss = String(val.getSeconds()).padStart(2, '0');
+              return `${hh}:${mm}:${ss}`;
+            }
+            return '';
           } catch (e) {
-            return String(val);
+            return '';
           }
         };
 

@@ -53,7 +53,7 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
     console.log('[registerAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
       // Extraer mensaje detallado del servidor
-      let errorMessage = 'Error al registrar asistencia';
+      let errorMessage = 'Error al registrar asistencia 3';
       if (payload?.message) errorMessage = payload.message;
       else if (payload?.error) errorMessage = payload.error;
       else if (payload?.detail) errorMessage = payload.detail;

@@ -75,7 +75,7 @@ export const registerAsistencia = async (req, res) => {
         return res.status(500).json({ message: 'Error en la base de datos. Contacte al administrador.' });
       }
       
-      return res.status(500).json({ message: errorMsg || 'Error al registrar asistencia' });
+      return res.status(500).json({ message: errorMsg || 'Error al registrar asistencia 1' });
     }
 
     let uploadResult = null;
@@ -92,7 +92,7 @@ export const registerAsistencia = async (req, res) => {
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);
-    res.status(500).json({ message: errorMsg || 'Error al registrar asistencia' });
+    res.status(500).json({ message: errorMsg || 'Error al registrar asistencia 2' });
   }
 };
 

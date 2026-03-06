@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { useCallback, useMemo } from 'react';
+import * as ImageManipulator from 'expo-image-manipulator';
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
 const getLimaDate = () => {
   try {
@@ -551,13 +552,42 @@ export default function ViewAsistencia() {
           setPendingIngresoWarning('');
         };
 
+        const redimensionarImagen = async (sourceUri, width, height) => {
+          try {
+            const resultado = await ImageManipulator.manipulateAsync(
+              sourceUri,
+              [{ resize: { width, height } }],
+              { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            return resultado.uri;
+          } catch (error) {
+            console.error('[redimensionarImagen] Error:', error);
+            return sourceUri;
+          }
+        };
+
         const convertImageToBase64 = async (asset) => {
           if (asset?.base64) return asset.base64;
 
-          const sourceUri = asset?.uri || asset?.localUri;
+          let sourceUri = asset?.uri || asset?.localUri;
           if (!sourceUri) {
             throw new Error('No existe URI de imagen para convertir');
           }
+
+          const ancho = asset?.width || 800;
+          const alto = asset?.height || 600;
+          const MAX_HEIGHT = 480;
+          const ratio = ancho / alto;
+          
+          let newWidth = ancho;
+          let newHeight = alto;
+          if (alto > MAX_HEIGHT) {
+            newHeight = MAX_HEIGHT;
+            newWidth = Math.round(MAX_HEIGHT * ratio);
+          }
+          
+          console.log('[convertImageToBase64] Redimensionando de ' + ancho + 'x' + alto + ' a ' + newWidth + 'x' + newHeight);
+          sourceUri = await redimensionarImagen(sourceUri, newWidth, newHeight);
 
           let readUri = sourceUri;
           let tempUri = null;

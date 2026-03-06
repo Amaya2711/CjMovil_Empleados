@@ -52,12 +52,23 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
     const payload = await res.json().catch(() => null);
     console.log('[registerAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
-      throw new Error(payload?.message || 'Error al registrar asistencia');
+      // Extraer mensaje detallado del servidor
+      let errorMessage = 'Error al registrar asistencia';
+      if (payload?.message) errorMessage = payload.message;
+      else if (payload?.error) errorMessage = payload.error;
+      else if (payload?.detail) errorMessage = payload.detail;
+      else if (typeof payload === 'string') errorMessage = payload;
+      else if (res.status === 400) errorMessage = 'Datos inválidos. Verifique los campos requeridos';
+      else if (res.status === 409) errorMessage = 'Ya existe un registro para esta fecha y hora';
+      else if (res.status === 500) errorMessage = 'Error en el servidor. Intente más tarde';
+      
+      throw new Error(errorMessage);
     }
     return payload;
   } catch (error) {
-    console.error('[registerAsistencia][ERROR]', error?.message || error);
-    return { error: true, message: error.message };
+    const errorMsg = error?.message || String(error);
+    console.error('[registerAsistencia][ERROR]', errorMsg);
+    return { error: true, message: errorMsg };
   }
 };
 

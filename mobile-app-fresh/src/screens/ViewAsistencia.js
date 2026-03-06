@@ -532,7 +532,10 @@ export default function ViewAsistencia() {
             setSelectedResumenEstado('__ALL__');
             await fetchData();
           } else {
-            setMessage(res.message || 'Error al registrar');
+            // Mostrar mensaje de error detallado
+            const errorDetails = res.message || 'Error al registrar asistencia';
+            console.error('[executeRegister][ERROR_DETAIL]', { tipo, errorDetails });
+            setMessage(`${errorDetails}. Si el problema persiste, contacte al administrador.`);
           }
         };
 

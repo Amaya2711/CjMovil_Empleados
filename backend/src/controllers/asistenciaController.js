@@ -35,7 +35,15 @@ export const registerAsistencia = async (req, res) => {
         : String(usuarioAct).trim();
 
     if (!usuarioActValue) {
-      return res.status(400).json({ message: 'Parámetro usuarioAct es requerido' });
+      return res.status(400).json({ message: 'El empleado/usuario no está disponible. Contacte al administrador.' });
+    }
+
+    if (!tipo) {
+      return res.status(400).json({ message: 'Debe especificar INGRESO o SALIDA.' });
+    }
+
+    if (lat === null || typeof lat === 'undefined' || lon === null || typeof lon === 'undefined') {
+      return res.status(400).json({ message: 'La ubicación (GPS) no pudo ser obtenida. Verifique que la ubicación esté habilitada.' });
     }
 
     const tipoNormalizado = String(tipo || '').trim().toUpperCase() === 'SALIDA' ? 'SALIDA' : 'INGRESO';
@@ -49,7 +57,27 @@ export const registerAsistencia = async (req, res) => {
     const dd = String(fechaArchivo.getDate()).padStart(2, '0');
     const nombreImagenFinal = `${tipoNormalizado}_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
 
-    const result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
+    let result;
+    try {
+      result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
+    } catch (error) {
+      const errorMsg = error?.message || String(error);
+      console.error('[registerAsistencia][SERVICE_ERROR]', errorMsg);
+      
+      // Analizar errores comunes de la base de datos
+      if (errorMsg.includes('Violation of PRIMARY KEY constraint')) {
+        return res.status(409).json({ message: 'Ya existe un registro para esta fecha y hora. No se puede registrar duplicado.' });
+      }
+      if (errorMsg.includes('Cannot insert NULL') || errorMsg.includes('NULL value')) {
+        return res.status(400).json({ message: 'Faltan datos requeridos para el registro. Verifique todos los campos.' });
+      }
+      if (errorMsg.includes('stored procedure') || errorMsg.includes('sp_Asistencia')) {
+        return res.status(500).json({ message: 'Error en la base de datos. Contacte al administrador.' });
+      }
+      
+      return res.status(500).json({ message: errorMsg || 'Error al registrar asistencia' });
+    }
+
     let uploadResult = null;
     if (imagenBase64) {
       try {
@@ -62,8 +90,9 @@ export const registerAsistencia = async (req, res) => {
     }
     res.json({ success: true, result, imageUpload: uploadResult });
   } catch (error) {
-    console.error('Error al registrar asistencia:', error);
-    res.status(500).json({ message: 'Error al registrar asistencia', error: error.message });
+    console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
+    const errorMsg = error?.message || String(error);
+    res.status(500).json({ message: errorMsg || 'Error al registrar asistencia' });
   }
 };
 

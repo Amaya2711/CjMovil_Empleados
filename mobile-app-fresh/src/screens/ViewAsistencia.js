@@ -564,167 +564,116 @@ export default function ViewAsistencia() {
               { compress: 0.35, format: ImageManipulator.SaveFormat.JPEG }
             );
             
-            console.log('[redimensionarImagen] ✓ ÉXITO - URI redimensionada:', resultado.uri);
-            console.log('[redimensionarImagen] Resultado completo:', JSON.stringify(resultado));
+            console.log('[redimensionarImagen] ✓ Resultado:', resultado.uri);
+            let finalUri = resultado.uri;
             
-            // Asegurar que el resultado sea un file:// URI, no content://
-            if (resultado.uri.startsWith('content://')) {
-              console.warn('[redimensionarImagen] ⚠ ALERTA: resultado es content:// URI, copiando a cache...');
-              const cacheUri = `${FileSystem.cacheDirectory}ingreso_resized_${Date.now()}.jpg`;
-              await FileSystem.copyAsync({ from: resultado.uri, to: cacheUri });
-              console.log('[redimensionarImagen] ✓ Copiada a cache:', cacheUri);
-              return cacheUri;
+            // Si el resultado es content://, copiarlo a cache
+            if (finalUri.startsWith('content://')) {
+              console.log('[redimensionarImagen] ⚠ Resultado es content://, copiando a cache...');
+              const cacheUri = `${FileSystem.cacheDirectory}resized_${Date.now()}.jpg`;
+              await FileSystem.copyAsync({ from: finalUri, to: cacheUri });
+              finalUri = cacheUri;
+              console.log('[redimensionarImagen] ✓ Copiado a:', finalUri);
             }
             
-            return resultado.uri;
+            return finalUri;
           } catch (error) {
             console.error('[redimensionarImagen] ✗ ERROR:', error.message);
-            console.error('[redimensionarImagen] Error completo:', JSON.stringify(error));
             console.error('[redimensionarImagen] Stack:', error.stack);
             throw new Error(`Redimensionamiento fallido: ${error.message}`);
           }
         };
 
         const convertImageToBase64 = async (asset) => {
-          console.log('[convertImageToBase64] ========== INICIO CONVERSIÓN ==========');
-          console.log('[convertImageToBase64] Asset recibido:', JSON.stringify({
-            uri: asset?.uri,
-            localUri: asset?.localUri,
-            width: asset?.width,
-            height: asset?.height,
-            type: asset?.type,
-            fileName: asset?.fileName,
-          }));
+          console.log('[convertImageToBase64] ========== CONVERSIÓN INICIO ==========');
+          console.log('[convertImageToBase64] Asset:', { uri: asset?.uri, width: asset?.width, height: asset?.height });
           
           let sourceUri = asset?.uri || asset?.localUri;
           if (!sourceUri) {
-            const err = 'No existe URI de imagen para convertir';
-            console.error('[convertImageToBase64] ✗ FATAL:', err);
-            throw new Error(err);
+            throw new Error('Sin URI de imagen');
           }
-          console.log('[convertImageToBase64] ✓ URI inicial válida:', sourceUri);
+          console.log('[convertImageToBase64] ✓ URI válida:', sourceUri.substring(0, 60) + '...');
 
-          let tempOriginalUri = null;
-          console.log('[convertImageToBase64] Platform.OS:', Platform.OS);
-          console.log('[convertImageToBase64] ¿Es Android content:// ?:', sourceUri.startsWith('content://'));
-          
-          if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
-            try {
-              console.log('[convertImageToBase64] → Copiando content:// URI a cache para lectura...');
-              tempOriginalUri = `${FileSystem.cacheDirectory}ingreso_original_${Date.now()}.jpg`;
-              console.log('[convertImageToBase64] → URI cache objetivo:', tempOriginalUri);
-              
-              await FileSystem.copyAsync({ from: sourceUri, to: tempOriginalUri });
-              console.log('[convertImageToBase64] ✓ COPIED to cache successfully');
-              
-              sourceUri = tempOriginalUri;
-            } catch (copyError) {
-              console.error('[convertImageToBase64] ✗ ERROR al copiar content:// a cache:', copyError.message);
-              console.error('[convertImageToBase64] Stack:', copyError.stack);
-              throw new Error(`No se pudo copiar imagen a cache: ${copyError.message}`);
-            }
-          }
-
-          // Redimensionar
-          const ancho = asset?.width || 800;
-          const alto = asset?.height || 600;
-          const MAX_HEIGHT = 320;
-          const ratio = ancho / alto;
-          
-          let newWidth = ancho;
-          let newHeight = alto;
-          if (alto > MAX_HEIGHT) {
-            newHeight = MAX_HEIGHT;
-            newWidth = Math.round(MAX_HEIGHT * ratio);
-          }
-          
-          console.log('[convertImageToBase64] → Redimensionando:', {
-            del: `${ancho}x${alto}`,
-            al: `${newWidth}x${newHeight}`,
-            ratio: ratio.toFixed(2),
-          });
-
-          let redimensionadaUri = null;
-          try {
-            redimensionadaUri = await redimensionarImagen(sourceUri, newWidth, newHeight);
-            console.log('[convertImageToBase64] ✓ Redimensionamiento exitoso:', redimensionadaUri);
-          } catch (resizeError) {
-            console.error('[convertImageToBase64] ✗ ERROR en redimensionamiento:', resizeError.message);
-            console.error('[convertImageToBase64] Stack:', resizeError.stack);
-            throw new Error(`Redimensionamiento falló: ${resizeError.message}`);
-          }
-
-          // Validar que la URI redimensionada sea file:// no content://
-          if (redimensionadaUri.startsWith('content://')) {
-            console.warn('[convertImageToBase64] ⚠ ALERTA: redimensionada es content://, copiando a cache...');
-            try {
-              const cachePath = `${FileSystem.cacheDirectory}ingreso_resized_${Date.now()}.jpg`;
-              await FileSystem.copyAsync({ from: redimensionadaUri, to: cachePath });
-              redimensionadaUri = cachePath;
-              console.log('[convertImageToBase64] ✓ Copiada a cache:', redimensionadaUri);
-            } catch (copyError) {
-              console.error('[convertImageToBase64] ✗ ERROR al copiar redimensionada:', copyError.message);
-              throw new Error(`No se pudo procesar imagen redimensionada: ${copyError.message}`);
-            }
-          }
-
-          // Leer Base64
-          console.log('[convertImageToBase64] → Leyendo Base64 desde:', redimensionadaUri);
-          let base64String = null;
+          let tempOriginalFile = null;
+          let resizedFile = null;
           
           try {
-            // Verificar que el archivo existe antes de leer
-            const fileInfo = await FileSystem.getInfoAsync(redimensionadaUri);
-            console.log('[convertImageToBase64] → Info del archivo:', {
-              exists: fileInfo.exists,
-              isDirectory: fileInfo.isDirectory,
-              size: fileInfo.size,
-              modificationTime: fileInfo.modificationTime,
-            });
-            
-            if (!fileInfo.exists) {
-              throw new Error(`El archivo no existe: ${redimensionadaUri}`);
+            // Step 1: Convertir content:// a file:// si es necesario
+            if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
+              try {
+                console.log('[convertImageToBase64] → Copiando content:// a cache...');
+                tempOriginalFile = `${FileSystem.cacheDirectory}img_${Date.now()}.jpg`;
+                await FileSystem.copyAsync({ from: sourceUri, to: tempOriginalFile });
+                console.log('[convertImageToBase64] ✓ Copiado a cache:', tempOriginalFile);
+                sourceUri = tempOriginalFile;
+              } catch (error) {
+                console.error('[convertImageToBase64] ✗ Error al copiar:', error.message);
+                throw error;
+              }
             }
-            
-            console.log('[convertImageToBase64] → Leyendo contenido como Base64...');
-            base64String = await FileSystem.readAsStringAsync(redimensionadaUri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            
-            if (!base64String) {
-              throw new Error('Base64 string vacío después de lectura');
+
+            // Step 2: Redimensionar
+            try {
+              const ancho = asset?.width || 800;
+              const alto = asset?.height || 600;
+              const MAX_HEIGHT = 320;
+              const ratio = ancho / alto;
+              const newHeight = Math.min(alto, MAX_HEIGHT);
+              const newWidth = Math.round(newHeight * ratio);
+              
+              console.log('[convertImageToBase64] → Redimensionando ' + ancho + 'x' + alto + ' → ' + newWidth + 'x' + newHeight);
+              resizedFile = await redimensionarImagen(sourceUri, newWidth, newHeight);
+              console.log('[convertImageToBase64] ✓ Redimensionada:', resizedFile);
+            } catch (error) {
+              console.error('[convertImageToBase64] ✗ Error redimensionar:', error.message);
+              throw error;
             }
-            
-            console.log('[convertImageToBase64] ✓ Base64 leído exitosamente');
-            console.log('[convertImageToBase64] Tamaño Base64:', base64String.length, 'caracteres');
-            
-          } catch (readError) {
-            console.error('[convertImageToBase64] ✗ ERROR al leer Base64:', readError.message);
-            console.error('[convertImageToBase64] Stack:', readError.stack);
-            console.error('[convertImageToBase64] Path intentado:', redimensionadaUri);
-            throw new Error(`No se pudo leer archivo: ${readError.message}`);
+
+            // Step 3: Leer como base64
+            let base64String = null;
+            try {
+              console.log('[convertImageToBase64] → Verificando archivo:', resizedFile);
+              const info = await FileSystem.getInfoAsync(resizedFile);
+              console.log('[convertImageToBase64] Info:', { exists: info.exists, size: info.size });
+              
+              if (!info.exists) {
+                throw new Error('Archivo no existe: ' + resizedFile);
+              }
+              
+              console.log('[convertImageToBase64] → Leyendo base64...');
+              base64String = await FileSystem.readAsStringAsync(resizedFile, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              
+              if (!base64String) {
+                throw new Error('Base64 vacío');
+              }
+              
+              console.log('[convertImageToBase64] ✓ Base64 leído:', base64String.length + ' caracteres');
+              return base64String;
+            } catch (error) {
+              console.error('[convertImageToBase64] ✗ Error leer base64:', error.message);
+              throw error;
+            }
           } finally {
-            // Limpieza de archivos temporales
-            console.log('[convertImageToBase64] → Limpiando archivos temporales...');
-            const filesToDelete = [
-              { path: tempOriginalUri, name: 'tempOriginalUri' },
-              { path: redimensionadaUri, name: 'redimensionadaUri (si es temp)' }
+            // Limpiar temporales
+            const filesToClean = [
+              { path: tempOriginalFile, name: 'tempOriginal' },
+              { path: resizedFile, name: 'resized' }
             ];
             
-            for (const file of filesToDelete) {
+            for (const file of filesToClean) {
               if (file.path) {
                 try {
                   await FileSystem.deleteAsync(file.path, { idempotent: true });
                   console.log('[convertImageToBase64] ✓ Eliminado:', file.name);
-                } catch (delError) {
-                  console.warn('[convertImageToBase64] ⚠ No se pudo eliminar:', file.name, delError.message);
+                } catch (e) {
+                  console.warn('[convertImageToBase64] ⚠ No limpió ' + file.name + ':', e.message);
                 }
               }
             }
+            console.log('[convertImageToBase64] ========== CONVERSIÓN OK ==========');
           }
-
-          console.log('[convertImageToBase64] ========== CONVERSIÓN COMPLETADA EXITOSAMENTE ==========');
-          return base64String;
         };
 
         const tomarFotoIngreso = async () => {
@@ -880,27 +829,23 @@ export default function ViewAsistencia() {
                 console.log('[confirmIngresoRegister] ✓ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmIngresoRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
               } catch (error) {
-                console.error('[confirmIngresoRegister] ========== ERROR EN PROCESAMIENTO DE IMAGEN ==========');
-                console.error('[confirmIngresoRegister] ✗ Error:', error.message);
-                console.error('[confirmIngresoRegister] Stack trace:', error.stack);
-                console.error('[confirmIngresoRegister] Error completo:', JSON.stringify(error));
-                console.error('[confirmIngresoRegister] Type:', typeof error);
-                console.error('[confirmIngresoRegister] Constructor:', error.constructor.name);
+                console.error('[confirmIngresoRegister] ✗ ERROR imagen:', error.message);
+                console.error('[confirmIngresoRegister] Stack:', error.stack);
                 
-                // Proporcionar mensaje de error más específico al usuario
-                let userMessage = 'Error al procesar la imagen. ';
-                if (error.message.includes('content://')) {
-                  userMessage += 'Problema al acceder a los archivos.';
-                } else if (error.message.includes('redimensionar') || error.message.includes('Redimensionamiento')) {
-                  userMessage += 'Problema al redimensionar. Intente una foto diferente.';
-                } else if (error.message.includes('Base64') || error.message.includes('leer')) {
-                  userMessage += 'Problema al codificar. Intente con otra foto.';
+                let userMsg = 'Error al procesar imagen: ';
+                if (error.message.includes('no existe') || error.message.includes('no exists')) {
+                  userMsg += 'Archivo no accesible. Recapture la foto.';
+                } else if (error.message.includes('Redimensionamiento')) {
+                  userMsg += 'Problema al redimensionar. Intente otra foto.';
+                } else if (error.message.includes('base64') || error.message.includes('leer')) {
+                  userMsg += 'Problema al procesar. Reconecte la foto.';
+                } else if (error.message.includes('copia')) {
+                  userMsg += 'Problema de almacenamiento. Libere espacio.';
                 } else {
-                  userMessage += error.message;
+                  userMsg += error.message;
                 }
                 
-                setMessage(userMessage + ' Consulte los logs si el problema persiste.');
-                console.error('[confirmIngresoRegister] Mensaje usuario:', userMessage);
+                setMessage(userMsg);
                 return;
               }
             }

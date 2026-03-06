@@ -629,18 +629,10 @@ export default function ViewAsistencia() {
               throw error;
             }
 
-            // Step 3: Leer como base64
+            // Step 3: Leer como base64 (sin verificación previa)
             let base64String = null;
             try {
-              console.log('[convertImageToBase64] → Verificando archivo:', resizedFile);
-              const info = await FileSystem.getInfoAsync(resizedFile);
-              console.log('[convertImageToBase64] Info:', { exists: info.exists, size: info.size });
-              
-              if (!info.exists) {
-                throw new Error('Archivo no existe: ' + resizedFile);
-              }
-              
-              console.log('[convertImageToBase64] → Leyendo base64...');
+              console.log('[convertImageToBase64] → Leyendo base64 desde:', resizedFile);
               base64String = await FileSystem.readAsStringAsync(resizedFile, {
                 encoding: FileSystem.EncodingType.Base64,
               });

@@ -83,7 +83,7 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
   });
 };
 
-export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida }) => {
+export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida, imagen }) => {
   const pool = await getConnection();
   const request = pool.request();
   const usuarioActNumber = Number.parseInt(String(usuarioAct ?? '').trim(), 10);
@@ -100,13 +100,15 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, co
   const lonValue = Number.isFinite(lonNumber) ? lonNumber : null;
 
   const comentarioValue = comentario === null || typeof comentario === 'undefined' ? null : String(comentario).slice(0, 250);
+  const imagenValue = imagen === null || typeof imagen === 'undefined' ? null : String(imagen).slice(0, 250);
   const estadoMarcacionValue = Number.isFinite(Number(estadoMarcacion)) ? Number(estadoMarcacion) : 1;
   const estadoSalidaValue = Number.isFinite(Number(estadoSalida)) ? Number(estadoSalida) : 1;
 
-  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s comentario=%s estadoMarcacion=%d estadoSalida=%d', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A', comentarioValue ?? 'N/A', estadoMarcacionValue, estadoSalidaValue);
+  console.log('[registerAsistenciaService] usuarioAct=%d tipo=%s pEnvio=%d lat=%s lon=%s comentario=%s imagen=%s estadoMarcacion=%d estadoSalida=%d', usuarioActNumber, tipoValue || 'N/A', pEnvio, latValue ?? 'N/A', lonValue ?? 'N/A', comentarioValue ?? 'N/A', imagenValue ?? 'N/A', estadoMarcacionValue, estadoSalidaValue);
   request.input('UsuarioAct', sql.Int, usuarioActNumber);
   request.input('pEnvio', sql.Int, pEnvio);
   request.input('Comentario', sql.NVarChar(250), comentarioValue);
+  request.input('Imagen', sql.NVarChar(250), imagenValue);
   if (pEnvio === 2) {
     request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
     request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);

@@ -57,9 +57,48 @@ export const registerAsistencia = async (req, res) => {
     const dd = String(fechaArchivo.getDate()).padStart(2, '0');
     const nombreImagenFinal = `${tipoNormalizado}_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
 
+    let uploadResult = null;
+    let imagenSharePointUrl = null;
+    if (imagenBase64) {
+      console.log('[registerAsistencia][IMAGE_DETECTED] Preparando carga a SharePoint...');
+      console.log('[registerAsistencia][IMAGE_INFO]', {
+        nombreArchivo: nombreImagenFinal,
+        tamañoBase64: imagenBase64.length,
+        tamañoEstimadoKB: Math.round((imagenBase64.length * 0.75) / 1024),
+      });
+      
+      try {
+        uploadResult = await uploadImageSafely(imagenBase64, nombreImagenFinal);
+        console.log('[registerAsistencia][UPLOAD_RESULT]', uploadResult);
+        
+        if (uploadResult.success) {
+          imagenSharePointUrl = uploadResult.fileUrl || null;
+          console.log('[registerAsistencia][✅ SUCCESS] Imagen subida exitosamente');
+          console.log('[registerAsistencia][IMAGE_URL]', imagenSharePointUrl || 'N/A');
+        } else {
+          console.warn('[registerAsistencia][⚠️ FAILED] No se pudo subir imagen:', uploadResult.error);
+        }
+      } catch (error) {
+        console.error('[registerAsistencia][UPLOAD_ERROR]', error.message);
+        console.error('[registerAsistencia][UPLOAD_ERROR_STACK]', error.stack);
+        uploadResult = { success: false, error: error.message, pendingUpload: true };
+      }
+    } else {
+      console.log('[registerAsistencia][NO_IMAGE] No se envió imagen en el request');
+    }
+
     let result;
     try {
-      result = await registerAsistenciaService({ usuarioAct: usuarioActValue, tipo, lat, lon, comentario, estadoMarcacion, estadoSalida });
+      result = await registerAsistenciaService({
+        usuarioAct: usuarioActValue,
+        tipo,
+        lat,
+        lon,
+        comentario,
+        estadoMarcacion,
+        estadoSalida,
+        imagen: imagenSharePointUrl,
+      });
     } catch (error) {
       const errorMsg = error?.message || String(error);
       console.error('[registerAsistencia][SERVICE_ERROR]', errorMsg);
@@ -77,41 +116,15 @@ export const registerAsistencia = async (req, res) => {
       
       return res.status(500).json({ message: errorMsg || 'Error al registrar asistencia 1' });
     }
-
-    let uploadResult = null;
-    if (imagenBase64) {
-      console.log('[registerAsistencia][IMAGE_DETECTED] Preparando carga a SharePoint...');
-      console.log('[registerAsistencia][IMAGE_INFO]', {
-        nombreArchivo: nombreImagenFinal,
-        tamañoBase64: imagenBase64.length,
-        tamañoEstimadoKB: Math.round((imagenBase64.length * 0.75) / 1024),
-      });
-      
-      try {
-        uploadResult = await uploadImageSafely(imagenBase64, nombreImagenFinal);
-        console.log('[registerAsistencia][UPLOAD_RESULT]', uploadResult);
-        
-        if (uploadResult.success) {
-          console.log('[registerAsistencia][✅ SUCCESS] Imagen subida exitosamente');
-        } else {
-          console.warn('[registerAsistencia][⚠️ FAILED] No se pudo subir imagen:', uploadResult.error);
-        }
-      } catch (error) {
-        console.error('[registerAsistencia][UPLOAD_ERROR]', error.message);
-        console.error('[registerAsistencia][UPLOAD_ERROR_STACK]', error.stack);
-        uploadResult = { success: false, error: error.message, pendingUpload: true };
-      }
-    } else {
-      console.log('[registerAsistencia][NO_IMAGE] No se envió imagen en el request');
-    }
     
     console.log('[registerAsistencia][FINAL_RESPONSE]', {
       asistenciaRegistrada: true,
       imagenEnviada: !!imagenBase64,
       imagenSubida: uploadResult?.success || false,
+      imagenSharePointUrl: imagenSharePointUrl || null,
     });
     
-    res.json({ success: true, result, imageUpload: uploadResult });
+    res.json({ success: true, result, imageUpload: uploadResult, imagen: imagenSharePointUrl });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

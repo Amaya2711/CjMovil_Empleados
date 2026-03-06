@@ -5,6 +5,11 @@ Las imágenes de "Comentario de ingreso" se cargan automáticamente al SharePoin
 - **Sitio**: https://cjtelecom.sharepoint.com/sites/CJ-PROYECTOS
 - **Carpeta**: APLICATIVOS EXTERNOS/ASISTENCIA
 
+Adicionalmente, la ruta de la imagen subida se guarda en base de datos mediante el SP `sp_Asistencia_Marcar`, usando el parámetro:
+- `@Imagen NVARCHAR(250)`
+
+El backend toma `uploadResult.fileUrl` de SharePoint y lo envía al SP como `Imagen`.
+
 ## Pasos de Configuración
 
 ### 1. Crear Azure AD App Registration
@@ -84,6 +89,7 @@ Para verificar que funciona:
 2. Verifica que el registro se guarde (aparecerá en el listado)
 3. En SharePoint, navega a: https://cjtelecom.sharepoint.com/sites/CJ-PROYECTOS/APLICATIVOS EXTERNOS/ASISTENCIA
 4. Deberías ver los archivos de imagen con nombres como: `INGRESO_<codEmp>_<timestamp>.jpg`
+5. En SQL, valida que el registro de asistencia del día tenga la URL en la columna `Imagen`.
 
 ## Solución de Problemas
 

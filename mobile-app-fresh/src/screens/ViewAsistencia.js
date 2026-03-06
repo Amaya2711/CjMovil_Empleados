@@ -588,7 +588,8 @@ export default function ViewAsistencia() {
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
-              { compress: 0.35, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+              // Compress: 0.35 (mínimo) | 0.6 (medio) | 0.8 (alto)
+              { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
             
             console.log('[redimensionarImagen] ✓ Resultado obtenido');
@@ -620,7 +621,9 @@ export default function ViewAsistencia() {
             // Step 1: Redimensionar y obtener base64 directamente de ImageManipulator
             const ancho = asset?.width || 800;
             const alto = asset?.height || 600;
-            const MAX_HEIGHT = 320;
+            // Configuración de calidad mejorada para SharePoint
+            // MAX_HEIGHT: 320 (mínimo) | 640 (medio) | 800 (alto)
+            const MAX_HEIGHT = 800;
             const ratio = ancho / alto;
             const newHeight = Math.min(alto, MAX_HEIGHT);
             const newWidth = Math.round(newHeight * ratio);
@@ -658,7 +661,8 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.1,
+              // Quality: 0.1 (10% mínimo) | 0.5 (50% medio) | 0.8 (80% alto)
+              quality: 0.7,
               base64: false,
             });
             
@@ -709,7 +713,8 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.1,
+              // Quality: 0.1 (10% mínimo) | 0.5 (50% medio) | 0.8 (80% alto)
+              quality: 0.7,
               base64: false,
             });
             

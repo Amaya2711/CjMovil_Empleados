@@ -588,8 +588,8 @@ export default function ViewAsistencia() {
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
-              // Compress: 0.35 (mínimo) | 0.6 (medio) | 0.8 (alto)
-              { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+              // Compress: 0.9 = calidad HD con pérdida mínima
+              { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
             
             console.log('[redimensionarImagen] ✓ Resultado obtenido');
@@ -619,11 +619,11 @@ export default function ViewAsistencia() {
 
           try {
             // Step 1: Redimensionar y obtener base64 directamente de ImageManipulator
-            const ancho = asset?.width || 800;
-            const alto = asset?.height || 600;
-            // Configuración de calidad mejorada para SharePoint
-            // MAX_HEIGHT: 320 (mínimo) | 640 (medio) | 800 (alto)
-            const MAX_HEIGHT = 800;
+            const ancho = asset?.width || 1920;
+            const alto = asset?.height || 1080;
+            // Configuración HD para SharePoint
+            // MAX_HEIGHT: 800 (normal) | 1080 (Full HD) | 1920 (Ultra HD)
+            const MAX_HEIGHT = 1920;
             const ratio = ancho / alto;
             const newHeight = Math.min(alto, MAX_HEIGHT);
             const newWidth = Math.round(newHeight * ratio);
@@ -661,8 +661,8 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              // Quality: 0.1 (10% mínimo) | 0.5 (50% medio) | 0.8 (80% alto)
-              quality: 0.7,
+              // Quality: 1.0 = sin compresión (máxima calidad HD)
+              quality: 1.0,
               base64: false,
             });
             
@@ -713,8 +713,8 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              // Quality: 0.1 (10% mínimo) | 0.5 (50% medio) | 0.8 (80% alto)
-              quality: 0.7,
+              // Quality: 1.0 = sin compresión (máxima calidad HD)
+              quality: 1.0,
               base64: false,
             });
             
@@ -784,10 +784,11 @@ export default function ViewAsistencia() {
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
                 console.log('[confirmIngresoRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
-                const MAX_IMAGE_BYTES = 700 * 1024;
+                // Límite aumentado para permitir imágenes HD: 5MB (5120KB)
+                const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
                 if (imageBytes > MAX_IMAGE_BYTES) {
-                  console.warn('[confirmIngresoRegister] ✗ RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 700KB)');
-                  setMessage('La imagen excede el límite permitido para producción (' + sizeInKB + 'KB). Intente una foto más cercana o con menos detalle.');
+                  console.warn('[confirmIngresoRegister] ✗ RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 5MB)');
+                  setMessage('La imagen excede el límite permitido para producción (' + sizeInMB + 'MB de 5MB). Intente una foto más cercana o con menos detalle.');
                   return;
                 }
                 

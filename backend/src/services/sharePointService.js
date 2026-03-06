@@ -149,9 +149,16 @@ export const uploadImageToSharePoint = async (imagenBase64, nombreImagen) => {
  * @returns {Promise<Object>} Upload result or fallback result
  */
 export const uploadImageSafely = async (imagenBase64, nombreImagen) => {
+  console.log('[uploadImageSafely] ========== INICIO CARGA SEGURA ==========');
+  console.log('[uploadImageSafely] Archivo:', nombreImagen);
+  console.log('[uploadImageSafely] Tamaño base64:', imagenBase64?.length || 0);
+  
   try {
-    return await uploadImageToSharePoint(imagenBase64, nombreImagen);
+    const result = await uploadImageToSharePoint(imagenBase64, nombreImagen);
+    console.log('[uploadImageSafely] ========== CARGA EXITOSA ==========');
+    return result;
   } catch (error) {
+    console.error('[uploadImageSafely] ========== CARGA FALLIDA ==========');
     console.warn('[uploadImageSafely] SharePoint upload failed, storing metadata:', error.message);
     // Fallback: just return metadata about the image
     // In production, you might store this in a local storage or database for later retry

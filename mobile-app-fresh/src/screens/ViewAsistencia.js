@@ -527,8 +527,35 @@ export default function ViewAsistencia() {
                       nombreImagen: nombreImagen || undefined,
           });
           setLoading(false);
+          
+          // Log completo de la respuesta para debugging
+          console.log('[executeRegister][RESPONSE_COMPLETA]', JSON.stringify(res, null, 2));
+          
           if (res && !res.error) {
-            setMessage(warningMessage ? `${warningMessage} ${tipo} registrado correctamente.` : `${tipo} registrado correctamente`);
+            let msg = warningMessage 
+              ? `${warningMessage} ${tipo} registrado correctamente` 
+              : `${tipo} registrado correctamente`;
+            
+            // 🔍 VALIDACIÓN TEMPORAL: Verificar estado de carga de imagen
+            if (imagenBase64 && nombreImagen) {
+              console.log('[executeRegister][IMAGE_CHECK] Se envió imagen, validando resultado...');
+              console.log('[executeRegister][IMAGE_UPLOAD_RESULT]', res.imageUpload);
+              
+              if (res.imageUpload) {
+                if (res.imageUpload.success === true) {
+                  msg += ' ✅ IMAGEN SUBIDA A SHAREPOINT';
+                  console.log('[executeRegister][IMAGE_SUCCESS] URL:', res.imageUpload.fileUrl);
+                } else {
+                  msg += ` ⚠️ IMAGEN NO SUBIDA: ${res.imageUpload.error || 'Error desconocido'}`;
+                  console.warn('[executeRegister][IMAGE_FAILED]', res.imageUpload);
+                }
+              } else {
+                msg += ' ⚠️ NO HAY RESPUESTA DE SHAREPOINT';
+                console.warn('[executeRegister][IMAGE_NO_RESPONSE] imageUpload es null/undefined');
+              }
+            }
+            
+            setMessage(msg);
             setActiveTab('RESUMEN');
             setSelectedResumenEstado('__ALL__');
             await fetchData();

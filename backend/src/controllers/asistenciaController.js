@@ -80,14 +80,37 @@ export const registerAsistencia = async (req, res) => {
 
     let uploadResult = null;
     if (imagenBase64) {
+      console.log('[registerAsistencia][IMAGE_DETECTED] Preparando carga a SharePoint...');
+      console.log('[registerAsistencia][IMAGE_INFO]', {
+        nombreArchivo: nombreImagenFinal,
+        tamañoBase64: imagenBase64.length,
+        tamañoEstimadoKB: Math.round((imagenBase64.length * 0.75) / 1024),
+      });
+      
       try {
         uploadResult = await uploadImageSafely(imagenBase64, nombreImagenFinal);
         console.log('[registerAsistencia][UPLOAD_RESULT]', uploadResult);
+        
+        if (uploadResult.success) {
+          console.log('[registerAsistencia][✅ SUCCESS] Imagen subida exitosamente');
+        } else {
+          console.warn('[registerAsistencia][⚠️ FAILED] No se pudo subir imagen:', uploadResult.error);
+        }
       } catch (error) {
         console.error('[registerAsistencia][UPLOAD_ERROR]', error.message);
+        console.error('[registerAsistencia][UPLOAD_ERROR_STACK]', error.stack);
         uploadResult = { success: false, error: error.message, pendingUpload: true };
       }
+    } else {
+      console.log('[registerAsistencia][NO_IMAGE] No se envió imagen en el request');
     }
+    
+    console.log('[registerAsistencia][FINAL_RESPONSE]', {
+      asistenciaRegistrada: true,
+      imagenEnviada: !!imagenBase64,
+      imagenSubida: uploadResult?.success || false,
+    });
+    
     res.json({ success: true, result, imageUpload: uploadResult });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);

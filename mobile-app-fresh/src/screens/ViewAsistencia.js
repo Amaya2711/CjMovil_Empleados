@@ -1117,6 +1117,15 @@ export default function ViewAsistencia() {
                   <Button onPress={confirmIngresoRegister} loading={confirmIngresoLoading} disabled={confirmIngresoLoading || registerActionRunning || !ingresoFoto}>Aceptar</Button>
                 </Dialog.Actions>
               </Dialog>
+
+              <Snackbar
+                visible={!!message}
+                onDismiss={() => setMessage('')}
+                duration={4500}
+                wrapperStyle={styles.snackbarWrapper}
+              >
+                {message}
+              </Snackbar>
             </Portal>
 
             {activeTab === 'REGISTRO' && null}
@@ -1187,9 +1196,6 @@ export default function ViewAsistencia() {
               </Card>
             )}
 
-            <Snackbar visible={!!message} onDismiss={() => setMessage('')} duration={3000}>
-              {message}
-            </Snackbar>
           </View>
         );
       }
@@ -1208,6 +1214,7 @@ export default function ViewAsistencia() {
         coordsText: { marginTop: 0, marginBottom: 4, marginHorizontal: 6, color: '#231F36', fontSize: 13 },
         compareButton: { marginBottom: 8 },
         deleteTestButton: { marginBottom: 8 },
+        snackbarWrapper: { top: 16, zIndex: 9999, elevation: 9999 },
         locationButton: { marginBottom: 12 },
         ingresoCommentInput: { backgroundColor: '#fff' },
         cardGrid: { flex: 1, marginTop: 8, minHeight: 720, paddingVertical: 8 },

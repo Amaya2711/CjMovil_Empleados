@@ -32,7 +32,14 @@ const getAccessToken = async () => {
     console.log('[getAccessToken] ClientSecret configurado:', clientSecret ? 'SI' : 'NO');
 
     if (!clientId || !clientSecret || !tenantId) {
-      throw new Error('SharePoint authentication credentials not configured');
+      const missing = [];
+      if (!clientId) missing.push('SHAREPOINT_CLIENT_ID');
+      if (!clientSecret) missing.push('SHAREPOINT_CLIENT_SECRET');
+      if (!tenantId) missing.push('SHAREPOINT_TENANT_ID');
+      
+      const errorMsg = `SharePoint authentication credentials not configured. Missing: ${missing.join(', ')}`;
+      console.error('[getAccessToken] ERROR:', errorMsg);
+      throw new Error(errorMsg);
     }
 
     const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;

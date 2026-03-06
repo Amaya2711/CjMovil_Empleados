@@ -16,6 +16,21 @@ import asistenciaRoutes from './routes/asistencia.js';
 
 dotenv.config();
 
+// Validar configuración de SharePoint al iniciar el servidor
+console.log('========================================');
+console.log('📋 VALIDACIÓN DE VARIABLES DE ENTORNO:');
+console.log('========================================');
+console.log('PORT:', process.env.PORT || 'NO CONFIGURADO (usando 4000)');
+console.log('SQLSERVER_HOST:', process.env.SQLSERVER_HOST ? '✓ Configurado' : '✗ NO CONFIGURADO');
+console.log('SQLSERVER_DB:', process.env.SQLSERVER_DB ? '✓ Configurado' : '✗ NO CONFIGURADO');
+console.log('');
+console.log('🔐 SHAREPOINT CREDENTIALS:');
+console.log('SHAREPOINT_CLIENT_ID:', process.env.SHAREPOINT_CLIENT_ID ? `✓ ${process.env.SHAREPOINT_CLIENT_ID}` : '✗ NO CONFIGURADO');
+console.log('SHAREPOINT_CLIENT_SECRET:', process.env.SHAREPOINT_CLIENT_SECRET ? `✓ ${process.env.SHAREPOINT_CLIENT_SECRET.substring(0, 10)}...` : '✗ NO CONFIGURADO');
+console.log('SHAREPOINT_TENANT_ID:', process.env.SHAREPOINT_TENANT_ID ? `✓ ${process.env.SHAREPOINT_TENANT_ID}` : '✗ NO CONFIGURADO');
+console.log('========================================');
+console.log('');
+
 const app = express();
 app.use(cors());
 app.use(express.json());

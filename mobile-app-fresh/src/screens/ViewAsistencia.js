@@ -553,32 +553,79 @@ export default function ViewAsistencia() {
         };
 
         const redimensionarImagen = async (sourceUri, width, height) => {
+          console.log('[redimensionarImagen] INICIO - sourceUri:', sourceUri);
+          console.log('[redimensionarImagen] Dimensiones objetivo:', { width, height });
+          
           try {
+            console.log('[redimensionarImagen] Llamando ImageManipulator.manipulateAsync...');
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
               { compress: 0.35, format: ImageManipulator.SaveFormat.JPEG }
             );
+            
+            console.log('[redimensionarImagen] ✓ ÉXITO - URI redimensionada:', resultado.uri);
+            console.log('[redimensionarImagen] Resultado completo:', JSON.stringify(resultado));
+            
+            // Asegurar que el resultado sea un file:// URI, no content://
+            if (resultado.uri.startsWith('content://')) {
+              console.warn('[redimensionarImagen] ⚠ ALERTA: resultado es content:// URI, copiando a cache...');
+              const cacheUri = `${FileSystem.cacheDirectory}ingreso_resized_${Date.now()}.jpg`;
+              await FileSystem.copyAsync({ from: resultado.uri, to: cacheUri });
+              console.log('[redimensionarImagen] ✓ Copiada a cache:', cacheUri);
+              return cacheUri;
+            }
+            
             return resultado.uri;
           } catch (error) {
-            console.error('[redimensionarImagen] Error:', error);
-            return sourceUri;
+            console.error('[redimensionarImagen] ✗ ERROR:', error.message);
+            console.error('[redimensionarImagen] Error completo:', JSON.stringify(error));
+            console.error('[redimensionarImagen] Stack:', error.stack);
+            throw new Error(`Redimensionamiento fallido: ${error.message}`);
           }
         };
 
         const convertImageToBase64 = async (asset) => {
+          console.log('[convertImageToBase64] ========== INICIO CONVERSIÓN ==========');
+          console.log('[convertImageToBase64] Asset recibido:', JSON.stringify({
+            uri: asset?.uri,
+            localUri: asset?.localUri,
+            width: asset?.width,
+            height: asset?.height,
+            type: asset?.type,
+            fileName: asset?.fileName,
+          }));
+          
           let sourceUri = asset?.uri || asset?.localUri;
           if (!sourceUri) {
-            throw new Error('No existe URI de imagen para convertir');
+            const err = 'No existe URI de imagen para convertir';
+            console.error('[convertImageToBase64] ✗ FATAL:', err);
+            throw new Error(err);
           }
+          console.log('[convertImageToBase64] ✓ URI inicial válida:', sourceUri);
 
           let tempOriginalUri = null;
+          console.log('[convertImageToBase64] Platform.OS:', Platform.OS);
+          console.log('[convertImageToBase64] ¿Es Android content:// ?:', sourceUri.startsWith('content://'));
+          
           if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
-            tempOriginalUri = `${FileSystem.cacheDirectory}ingreso_original_${Date.now()}.jpg`;
-            await FileSystem.copyAsync({ from: sourceUri, to: tempOriginalUri });
-            sourceUri = tempOriginalUri;
+            try {
+              console.log('[convertImageToBase64] → Copiando content:// URI a cache para lectura...');
+              tempOriginalUri = `${FileSystem.cacheDirectory}ingreso_original_${Date.now()}.jpg`;
+              console.log('[convertImageToBase64] → URI cache objetivo:', tempOriginalUri);
+              
+              await FileSystem.copyAsync({ from: sourceUri, to: tempOriginalUri });
+              console.log('[convertImageToBase64] ✓ COPIED to cache successfully');
+              
+              sourceUri = tempOriginalUri;
+            } catch (copyError) {
+              console.error('[convertImageToBase64] ✗ ERROR al copiar content:// a cache:', copyError.message);
+              console.error('[convertImageToBase64] Stack:', copyError.stack);
+              throw new Error(`No se pudo copiar imagen a cache: ${copyError.message}`);
+            }
           }
 
+          // Redimensionar
           const ancho = asset?.width || 800;
           const alto = asset?.height || 600;
           const MAX_HEIGHT = 320;
@@ -591,79 +638,194 @@ export default function ViewAsistencia() {
             newWidth = Math.round(MAX_HEIGHT * ratio);
           }
           
-          console.log('[convertImageToBase64] Redimensionando de ' + ancho + 'x' + alto + ' a ' + newWidth + 'x' + newHeight);
-          sourceUri = await redimensionarImagen(sourceUri, newWidth, newHeight);
+          console.log('[convertImageToBase64] → Redimensionando:', {
+            del: `${ancho}x${alto}`,
+            al: `${newWidth}x${newHeight}`,
+            ratio: ratio.toFixed(2),
+          });
 
-          let readUri = sourceUri;
-          let tempUri = null;
-
+          let redimensionadaUri = null;
           try {
-            const base64String = await FileSystem.readAsStringAsync(readUri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            if (!base64String) throw new Error('Base64 vacío');
-            return base64String;
-          } finally {
-            if (tempOriginalUri) {
-              await FileSystem.deleteAsync(tempOriginalUri, { idempotent: true });
-            }
-            if (tempUri) {
-              await FileSystem.deleteAsync(tempUri, { idempotent: true });
+            redimensionadaUri = await redimensionarImagen(sourceUri, newWidth, newHeight);
+            console.log('[convertImageToBase64] ✓ Redimensionamiento exitoso:', redimensionadaUri);
+          } catch (resizeError) {
+            console.error('[convertImageToBase64] ✗ ERROR en redimensionamiento:', resizeError.message);
+            console.error('[convertImageToBase64] Stack:', resizeError.stack);
+            throw new Error(`Redimensionamiento falló: ${resizeError.message}`);
+          }
+
+          // Validar que la URI redimensionada sea file:// no content://
+          if (redimensionadaUri.startsWith('content://')) {
+            console.warn('[convertImageToBase64] ⚠ ALERTA: redimensionada es content://, copiando a cache...');
+            try {
+              const cachePath = `${FileSystem.cacheDirectory}ingreso_resized_${Date.now()}.jpg`;
+              await FileSystem.copyAsync({ from: redimensionadaUri, to: cachePath });
+              redimensionadaUri = cachePath;
+              console.log('[convertImageToBase64] ✓ Copiada a cache:', redimensionadaUri);
+            } catch (copyError) {
+              console.error('[convertImageToBase64] ✗ ERROR al copiar redimensionada:', copyError.message);
+              throw new Error(`No se pudo procesar imagen redimensionada: ${copyError.message}`);
             }
           }
+
+          // Leer Base64
+          console.log('[convertImageToBase64] → Leyendo Base64 desde:', redimensionadaUri);
+          let base64String = null;
+          
+          try {
+            // Verificar que el archivo existe antes de leer
+            const fileInfo = await FileSystem.getInfoAsync(redimensionadaUri);
+            console.log('[convertImageToBase64] → Info del archivo:', {
+              exists: fileInfo.exists,
+              isDirectory: fileInfo.isDirectory,
+              size: fileInfo.size,
+              modificationTime: fileInfo.modificationTime,
+            });
+            
+            if (!fileInfo.exists) {
+              throw new Error(`El archivo no existe: ${redimensionadaUri}`);
+            }
+            
+            console.log('[convertImageToBase64] → Leyendo contenido como Base64...');
+            base64String = await FileSystem.readAsStringAsync(redimensionadaUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            
+            if (!base64String) {
+              throw new Error('Base64 string vacío después de lectura');
+            }
+            
+            console.log('[convertImageToBase64] ✓ Base64 leído exitosamente');
+            console.log('[convertImageToBase64] Tamaño Base64:', base64String.length, 'caracteres');
+            
+          } catch (readError) {
+            console.error('[convertImageToBase64] ✗ ERROR al leer Base64:', readError.message);
+            console.error('[convertImageToBase64] Stack:', readError.stack);
+            console.error('[convertImageToBase64] Path intentado:', redimensionadaUri);
+            throw new Error(`No se pudo leer archivo: ${readError.message}`);
+          } finally {
+            // Limpieza de archivos temporales
+            console.log('[convertImageToBase64] → Limpiando archivos temporales...');
+            const filesToDelete = [
+              { path: tempOriginalUri, name: 'tempOriginalUri' },
+              { path: redimensionadaUri, name: 'redimensionadaUri (si es temp)' }
+            ];
+            
+            for (const file of filesToDelete) {
+              if (file.path) {
+                try {
+                  await FileSystem.deleteAsync(file.path, { idempotent: true });
+                  console.log('[convertImageToBase64] ✓ Eliminado:', file.name);
+                } catch (delError) {
+                  console.warn('[convertImageToBase64] ⚠ No se pudo eliminar:', file.name, delError.message);
+                }
+              }
+            }
+          }
+
+          console.log('[convertImageToBase64] ========== CONVERSIÓN COMPLETADA EXITOSAMENTE ==========');
+          return base64String;
         };
 
         const tomarFotoIngreso = async () => {
           try {
+            console.log('[tomarFotoIngreso] Solicitando permiso de cámara...');
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            console.log('[tomarFotoIngreso] Estado permiso cámara:', status);
+            
             if (status !== 'granted') {
               setMessage('Se requiere permiso de camara para tomar foto');
+              console.warn('[tomarFotoIngreso] Permiso cámara rechazado');
               return;
             }
+            
+            console.log('[tomarFotoIngreso] Abriendo cámara...');
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               quality: 0.1,
               base64: false,
             });
+            
+            console.log('[tomarFotoIngreso] Resultado cámara:', {
+              canceled: result.canceled,
+              assetsLength: result.assets?.length,
+            });
+            
             if (!result.canceled && result.assets && result.assets.length > 0) {
-              if (!result.assets[0]?.uri) {
+              const asset = result.assets[0];
+              console.log('[tomarFotoIngreso] ✓ Foto capturada exitosamente:', {
+                uri: asset.uri,
+                width: asset.width,
+                height: asset.height,
+                type: asset.type,
+                fileName: asset.fileName,
+              });
+              
+              if (!asset?.uri) {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
+                console.error('[tomarFotoIngreso] ✗ Asset sin URI');
                 return;
               }
-              console.log('[tomarFotoIngreso] Foto capturada - Dimensiones:', result.assets[0].width, 'x', result.assets[0].height);
-              setIngresoFoto(result.assets[0]);
+              setIngresoFoto(asset);
+            } else {
+              console.log('[tomarFotoIngreso] Captura cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[tomarFotoIngreso] Error:', error);
-            setMessage('Error al tomar foto');
+            console.error('[tomarFotoIngreso] ✗ Error:', error.message);
+            console.error('[tomarFotoIngreso] Stack:', error.stack);
+            setMessage('Error al tomar foto: ' + error.message);
           }
         };
 
         const seleccionarImagenIngreso = async () => {
           try {
+            console.log('[seleccionarImagenIngreso] Solicitando permiso de librería de medios...');
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            console.log('[seleccionarImagenIngreso] Estado permiso galería:', status);
+            
             if (status !== 'granted') {
               setMessage('Se requiere permiso de galeria para seleccionar foto');
+              console.warn('[seleccionarImagenIngreso] Permiso galería rechazado');
               return;
             }
+            
+            console.log('[seleccionarImagenIngreso] Abriendo galería...');
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               quality: 0.1,
               base64: false,
             });
+            
+            console.log('[seleccionarImagenIngreso] Resultado galería:', {
+              canceled: result.canceled,
+              assetsLength: result.assets?.length,
+            });
+            
             if (!result.canceled && result.assets && result.assets.length > 0) {
-              if (!result.assets[0]?.uri) {
+              const asset = result.assets[0];
+              console.log('[seleccionarImagenIngreso] ✓ Imagen seleccionada exitosamente:', {
+                uri: asset.uri,
+                width: asset.width,
+                height: asset.height,
+                type: asset.type,
+                fileName: asset.fileName,
+              });
+              
+              if (!asset?.uri) {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
+                console.error('[seleccionarImagenIngreso] ✗ Asset sin URI');
                 return;
               }
-              console.log('[seleccionarImagenIngreso] Imagen seleccionada - Dimensiones:', result.assets[0].width, 'x', result.assets[0].height);
-              setIngresoFoto(result.assets[0]);
+              setIngresoFoto(asset);
+            } else {
+              console.log('[seleccionarImagenIngreso] Selección cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[seleccionarImagenIngreso] Error:', error);
-            setMessage('Error al seleccionar imagen');
+            console.error('[seleccionarImagenIngreso] ✗ Error:', error.message);
+            console.error('[seleccionarImagenIngreso] Stack:', error.stack);
+            setMessage('Error al seleccionar imagen: ' + error.message);
           }
         };
 
@@ -688,16 +850,23 @@ export default function ViewAsistencia() {
             let nombreImagen = null;
             if (ingresoFoto && (ingresoFoto.uri || ingresoFoto.localUri)) {
               try {
-                console.log('[confirmIngresoRegister] Iniciando conversión de imagen...');
+                console.log('[confirmIngresoRegister] ========== INICIANDO PROCESAMIENTO DE IMAGEN ==========');
+                console.log('[confirmIngresoRegister] Foto seleccionada:', {
+                  uri: ingresoFoto.uri,
+                  width: ingresoFoto.width,
+                  height: ingresoFoto.height,
+                });
+                
                 imagenBase64 = await convertImageToBase64(ingresoFoto);
+                
                 const imageBytes = imagenBase64.length * 0.75;
                 const sizeInKB = (imageBytes / 1024).toFixed(2);
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
-                console.log('[confirmIngresoRegister] Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
+                console.log('[confirmIngresoRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
                 const MAX_IMAGE_BYTES = 700 * 1024;
                 if (imageBytes > MAX_IMAGE_BYTES) {
-                  console.warn('[confirmIngresoRegister] RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 700KB)');
+                  console.warn('[confirmIngresoRegister] ✗ RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 700KB)');
                   setMessage('La imagen excede el límite permitido para producción (' + sizeInKB + 'KB). Intente una foto más cercana o con menos detalle.');
                   return;
                 }
@@ -708,10 +877,30 @@ export default function ViewAsistencia() {
                 const dd = String(d.getDate()).padStart(2, '0');
                 const codEmpArchivo = String(cuadrilla || codEmp || idusuario || 'SINCOD').trim();
                 nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
+                console.log('[confirmIngresoRegister] ✓ Nombre de imagen asignado:', nombreImagen);
+                console.log('[confirmIngresoRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
               } catch (error) {
-                console.error('[confirmIngresoRegister] Error al convertir imagen:', error);
+                console.error('[confirmIngresoRegister] ========== ERROR EN PROCESAMIENTO DE IMAGEN ==========');
+                console.error('[confirmIngresoRegister] ✗ Error:', error.message);
+                console.error('[confirmIngresoRegister] Stack trace:', error.stack);
                 console.error('[confirmIngresoRegister] Error completo:', JSON.stringify(error));
-                setMessage('Error al procesar la imagen. Intente con otra foto.');
+                console.error('[confirmIngresoRegister] Type:', typeof error);
+                console.error('[confirmIngresoRegister] Constructor:', error.constructor.name);
+                
+                // Proporcionar mensaje de error más específico al usuario
+                let userMessage = 'Error al procesar la imagen. ';
+                if (error.message.includes('content://')) {
+                  userMessage += 'Problema al acceder a los archivos.';
+                } else if (error.message.includes('redimensionar') || error.message.includes('Redimensionamiento')) {
+                  userMessage += 'Problema al redimensionar. Intente una foto diferente.';
+                } else if (error.message.includes('Base64') || error.message.includes('leer')) {
+                  userMessage += 'Problema al codificar. Intente con otra foto.';
+                } else {
+                  userMessage += error.message;
+                }
+                
+                setMessage(userMessage + ' Consulte los logs si el problema persiste.');
+                console.error('[confirmIngresoRegister] Mensaje usuario:', userMessage);
                 return;
               }
             }

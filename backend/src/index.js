@@ -2,7 +2,41 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
-console.log('Archivos en backend:', fs.readdirSync('.'));
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Obtener __dirname en ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+console.log('========================================');
+console.log('🔍 DEBUGGING DOTENV:');
+console.log('========================================');
+console.log('Directorio actual (cwd):', process.cwd());
+console.log('Directorio del script (__dirname):', __dirname);
+console.log('Archivos en cwd:', fs.readdirSync(process.cwd()));
+
+// Intentar cargar .env desde la raíz del proyecto (parent de src/)
+const envPath = path.resolve(__dirname, '..', '.env');
+console.log('Ruta absoluta del .env:', envPath);
+console.log('¿Existe el archivo .env?:', fs.existsSync(envPath) ? '✓ SI' : '✗ NO');
+
+if (fs.existsSync(envPath)) {
+  console.log('Contenido del .env (primeras 5 líneas):');
+  const envContent = fs.readFileSync(envPath, 'utf-8').split('\n').slice(0, 5);
+  envContent.forEach(line => console.log('  ', line));
+}
+
+// Cargar .env con ruta explícita
+const result = dotenv.config({ path: envPath });
+if (result.error) {
+  console.error('✗ ERROR cargando .env:', result.error);
+} else {
+  console.log('✓ Archivo .env cargado correctamente');
+}
+console.log('========================================');
+console.log('');
+
 import authRoutes from './routes/auth.js';
 import aprobacionRoutes from './routes/aprobacion.js';
 import solicitanteRoutes from './routes/solicitanteRoutes.js';
@@ -13,8 +47,6 @@ import aprobarPlanillaRoutes from './routes/aprobarPlanilla.js';
 import reaprobacionesRoutes from './routes/reaprobaciones.js';
 import gastosRoutes from './routes/gastos.js';
 import asistenciaRoutes from './routes/asistencia.js';
-
-dotenv.config();
 
 // Validar configuración de SharePoint al iniciar el servidor
 console.log('========================================');

@@ -53,15 +53,26 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
     console.log('[registerAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
       // Extraer mensaje detallado del servidor
-      let errorMessage = 'Error al registrar asistencia 3';
-      if (payload?.message) errorMessage = payload.message;
-      else if (payload?.error) errorMessage = payload.error;
-      else if (payload?.detail) errorMessage = payload.detail;
-      else if (typeof payload === 'string') errorMessage = payload;
-      else if (res.status === 400) errorMessage = 'Datos inválidos. Verifique los campos requeridos';
-      else if (res.status === 409) errorMessage = 'Ya existe un registro para esta fecha y hora';
-      else if (res.status === 500) errorMessage = 'Error en el servidor. Intente más tarde';
+      let errorMessage = null;
       
+      // Intentar obtener el mensaje de múltiples fuentes
+      if (payload) {
+        if (typeof payload === 'string') {
+          errorMessage = payload;
+        } else if (typeof payload === 'object') {
+          errorMessage = payload.message || payload.error || payload.detail || payload.msg || null;
+        }
+      }
+      
+      // Si no hay mensaje, usar uno basado en el status HTTP
+      if (!errorMessage) {
+        if (res.status === 400) errorMessage = 'Datos inválidos. Verifique los campos requeridos';
+        else if (res.status === 409) errorMessage = 'Ya existe un registro para esta fecha y hora';
+        else if (res.status === 500) errorMessage = 'Error en el servidor. Intente más tarde';
+        else errorMessage = `Error HTTP ${res.status}. No se pudo registrar la asistencia`;
+      }
+      
+      console.error('[registerAsistencia][ERROR_DETAIL]', { status: res.status, payload, errorMessage });
       throw new Error(errorMessage);
     }
     return payload;

@@ -3,7 +3,10 @@
 ## Descripción
 Las imágenes de "Comentario de ingreso" se cargan automáticamente al SharePoint en:
 - **Sitio**: https://cjtelecom.sharepoint.com/sites/CJ-PROYECTOS
-- **Carpeta**: APLICATIVOS EXTERNOS/ASISTENCIA
+- **Biblioteca (Drive)**: APLICATIVOS EXTERNOS
+- **Carpeta dentro de la biblioteca**: ASISTENCIA
+
+Esto evita que los archivos se guarden en la biblioteca por defecto `Documentos compartidos`.
 
 Adicionalmente, la ruta de la imagen subida se guarda en base de datos mediante el SP `sp_Asistencia_Marcar`, usando el parámetro:
 - `@Imagen NVARCHAR(250)`
@@ -67,9 +70,14 @@ Actualiza tu archivo `.env` en el backend:
 SHAREPOINT_CLIENT_ID=YOUR_CLIENT_ID_HERE
 SHAREPOINT_CLIENT_SECRET=YOUR_CLIENT_SECRET_HERE
 SHAREPOINT_TENANT_ID=YOUR_TENANT_ID_HERE
+
+# Biblioteca/Carpeta objetivo (opcional, recomendado para producción)
+SHAREPOINT_DRIVE_NAME=APLICATIVOS EXTERNOS
+SHAREPOINT_FOLDER_PATH=ASISTENCIA
 ```
 
 Reemplaza `YOUR_CLIENT_ID_HERE`, `YOUR_CLIENT_SECRET_HERE`, y `YOUR_TENANT_ID_HERE` con los valores obtenidos arriba.
+Si no defines `SHAREPOINT_DRIVE_NAME`, Microsoft Graph usará la biblioteca por defecto y las imágenes pueden terminar en `Documentos compartidos`.
 
 ### 7. Reiniciar el Backend
 

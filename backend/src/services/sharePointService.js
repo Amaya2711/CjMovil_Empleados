@@ -2,7 +2,8 @@ import axios from 'axios';
 
 // SharePoint configuration
 const SHAREPOINT_SITE_URL = 'https://cjtelecom.sharepoint.com/sites/CJ-PROYECTOS';
-const SHAREPOINT_FOLDER_PATH = '/sites/CJ-PROYECTOS/APLICATIVOS EXTERNOS/ASISTENCIA';
+const SHAREPOINT_DRIVE_NAME = process.env.SHAREPOINT_DRIVE_NAME || 'APLICATIVOS EXTERNOS';
+const SHAREPOINT_FOLDER_PATH = process.env.SHAREPOINT_FOLDER_PATH || 'ASISTENCIA';
 
 // Note: You need to configure SharePoint authentication credentials
 // Options:
@@ -88,6 +89,42 @@ const getSiteId = async (token) => {
 };
 
 /**
+ * Get target SharePoint drive/library ID by name.
+ * This avoids uploading into the default "Documentos compartidos" library.
+ */
+const getTargetDriveId = async (token, siteId) => {
+  try {
+    console.log('[getTargetDriveId] Buscando biblioteca objetivo:', SHAREPOINT_DRIVE_NAME);
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${siteId}/drives`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      }
+    );
+
+    const drives = response.data?.value || [];
+    const normalizedTarget = String(SHAREPOINT_DRIVE_NAME || '').trim().toUpperCase();
+    const targetDrive = drives.find((drive) =>
+      String(drive?.name || '').trim().toUpperCase() === normalizedTarget
+    );
+
+    if (!targetDrive?.id) {
+      const available = drives.map((d) => d?.name).filter(Boolean).join(', ');
+      throw new Error(`No se encontró la biblioteca '${SHAREPOINT_DRIVE_NAME}'. Disponibles: ${available || 'N/A'}`);
+    }
+
+    console.log('[getTargetDriveId] Biblioteca encontrada:', targetDrive.name, 'ID:', targetDrive.id);
+    return targetDrive.id;
+  } catch (error) {
+    console.error('[getTargetDriveId] Error:', error.response?.data || error.message);
+    throw new Error(`Failed to get SharePoint drive ID: ${error.message}`);
+  }
+};
+
+/**
  * Upload image to SharePoint
  * @param {string} imagenBase64 - Base64 encoded image
  * @param {string} nombreImagen - File name
@@ -104,19 +141,20 @@ export const uploadImageToSharePoint = async (imagenBase64, nombreImagen) => {
 
     const token = await getAccessToken();
     const siteId = await getSiteId(token);
+    const driveId = await getTargetDriveId(token, siteId);
 
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(imagenBase64, 'base64');
     console.log('[uploadImageToSharePoint] Buffer creado, tamaño:', imageBuffer.length, 'bytes');
 
-    // Usar la ruta relativa de la carpeta
-    const folderPath = 'APLICATIVOS EXTERNOS/ASISTENCIA';
-    const fileItemPath = `${folderPath}/${nombreImagen}`;
+    // Ruta relativa dentro de la biblioteca objetivo (drive)
+    const folderPath = String(SHAREPOINT_FOLDER_PATH || '').trim().replace(/^\/+|\/+$/g, '');
+    const fileItemPath = folderPath ? `${folderPath}/${nombreImagen}` : nombreImagen;
     
-    // SharePoint Microsoft Graph API endpoint
-    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${fileItemPath}:/content`;
+    // SharePoint Microsoft Graph API endpoint (drive específico)
+    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drives/${driveId}/root:/${fileItemPath}:/content`;
     
-    console.log('[uploadImageToSharePoint] URL de carga (site):', uploadUrl);
+    console.log('[uploadImageToSharePoint] URL de carga (drive):', uploadUrl);
 
     const response = await axios.put(uploadUrl, imageBuffer, {
       headers: {

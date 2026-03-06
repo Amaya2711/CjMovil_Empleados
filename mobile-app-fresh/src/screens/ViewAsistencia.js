@@ -591,7 +591,7 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.3,
+              quality: 0.15,
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -618,7 +618,7 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.3,
+              quality: 0.15,
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -659,11 +659,14 @@ export default function ViewAsistencia() {
                 console.log('[confirmIngresoRegister] Iniciando conversión de imagen...');
                 imagenBase64 = await convertImageToBase64(ingresoFoto);
                 const sizeInKB = (imagenBase64.length * 0.75 / 1024).toFixed(2);
-                console.log('[confirmIngresoRegister] Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB');
+                const sizeInMB = (imagenBase64.length * 0.75 / 1024 / 1024).toFixed(2);
+                console.log('[confirmIngresoRegister] Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
-                if (imagenBase64.length > 25 * 1024 * 1024) {
-                  console.warn('[confirmIngresoRegister] ADVERTENCIA: Imagen muy grande (>25MB base64)');
-                  setMessage('La imagen es demasiado grande. Intente con una foto de menor resolución.');
+                // Validar que no exceda 5MB (limite robusto para evitar 413)
+                const MAX_BASE64_SIZE = 5 * 1024 * 1024; // 5MB
+                if (imagenBase64.length > MAX_BASE64_SIZE) {
+                  console.warn('[confirmIngresoRegister] RECHAZO: Imagen muy grande (' + sizeInMB + 'MB > 5MB)');
+                  setMessage('La imagen es demasiado grande (~' + sizeInMB + 'MB). Máximo permitido: 5MB. Intente con una foto de menor resolución o dimensiones.');
                   return;
                 }
                 

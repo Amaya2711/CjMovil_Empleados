@@ -56,6 +56,31 @@ const getAccessToken = async () => {
 };
 
 /**
+ * Get SharePoint site ID
+ */
+const getSiteId = async (token) => {
+  try {
+    console.log('[getSiteId] Obteniendo site ID...');
+    const response = await axios.get(
+      'https://graph.microsoft.com/v1.0/sites/cjtelecom.sharepoint.com:/sites/CJ-PROYECTOS:/',
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      }
+    );
+    
+    const siteId = response.data.id;
+    console.log('[getSiteId] Site ID obtenido:', siteId);
+    return siteId;
+  } catch (error) {
+    console.error('[getSiteId] Error:', error.response?.data || error.message);
+    throw new Error(`Failed to get SharePoint site ID: ${error.message}`);
+  }
+};
+
+/**
  * Upload image to SharePoint
  * @param {string} imagenBase64 - Base64 encoded image
  * @param {string} nombreImagen - File name
@@ -71,17 +96,22 @@ export const uploadImageToSharePoint = async (imagenBase64, nombreImagen) => {
     }
 
     const token = await getAccessToken();
+    const siteId = await getSiteId(token);
 
     // Convert base64 to buffer
     const imageBuffer = Buffer.from(imagenBase64, 'base64');
     console.log('[uploadImageToSharePoint] Buffer creado, tamaño:', imageBuffer.length, 'bytes');
 
-    // SharePoint REST API endpoint to upload file usando Microsoft Graph API
-    const driveUrl = `https://graph.microsoft.com/v1.0/sites/cjtelecom.sharepoint.com:/sites/CJ-PROYECTOS:/drive/root:/APLICATIVOS%20EXTERNOS/ASISTENCIA/${encodeURIComponent(nombreImagen)}:/content`;
+    // Usar la ruta relativa de la carpeta
+    const folderPath = 'APLICATIVOS EXTERNOS/ASISTENCIA';
+    const fileItemPath = `${folderPath}/${nombreImagen}`;
     
-    console.log('[uploadImageToSharePoint] URL de carga:', driveUrl);
+    // SharePoint Microsoft Graph API endpoint
+    const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${fileItemPath}:/content`;
+    
+    console.log('[uploadImageToSharePoint] URL de carga (site):', uploadUrl);
 
-    const response = await axios.put(driveUrl, imageBuffer, {
+    const response = await axios.put(uploadUrl, imageBuffer, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'image/jpeg',

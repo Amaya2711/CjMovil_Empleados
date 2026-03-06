@@ -557,7 +557,7 @@ export default function ViewAsistencia() {
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
-              { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+              { compress: 0.35, format: ImageManipulator.SaveFormat.JPEG }
             );
             return resultado.uri;
           } catch (error) {
@@ -567,16 +567,21 @@ export default function ViewAsistencia() {
         };
 
         const convertImageToBase64 = async (asset) => {
-          if (asset?.base64) return asset.base64;
-
           let sourceUri = asset?.uri || asset?.localUri;
           if (!sourceUri) {
             throw new Error('No existe URI de imagen para convertir');
           }
 
+          let tempOriginalUri = null;
+          if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
+            tempOriginalUri = `${FileSystem.cacheDirectory}ingreso_original_${Date.now()}.jpg`;
+            await FileSystem.copyAsync({ from: sourceUri, to: tempOriginalUri });
+            sourceUri = tempOriginalUri;
+          }
+
           const ancho = asset?.width || 800;
           const alto = asset?.height || 600;
-          const MAX_HEIGHT = 480;
+          const MAX_HEIGHT = 320;
           const ratio = ancho / alto;
           
           let newWidth = ancho;
@@ -592,12 +597,6 @@ export default function ViewAsistencia() {
           let readUri = sourceUri;
           let tempUri = null;
 
-          if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
-            tempUri = `${FileSystem.cacheDirectory}ingreso_${Date.now()}.jpg`;
-            await FileSystem.copyAsync({ from: sourceUri, to: tempUri });
-            readUri = tempUri;
-          }
-
           try {
             const base64String = await FileSystem.readAsStringAsync(readUri, {
               encoding: FileSystem.EncodingType.Base64,
@@ -605,6 +604,9 @@ export default function ViewAsistencia() {
             if (!base64String) throw new Error('Base64 vacío');
             return base64String;
           } finally {
+            if (tempOriginalUri) {
+              await FileSystem.deleteAsync(tempOriginalUri, { idempotent: true });
+            }
             if (tempUri) {
               await FileSystem.deleteAsync(tempUri, { idempotent: true });
             }
@@ -621,11 +623,11 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.15,
-              base64: true,
+              quality: 0.1,
+              base64: false,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-              if (!result.assets[0]?.base64) {
+              if (!result.assets[0]?.uri) {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
                 return;
               }
@@ -648,11 +650,11 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 0.15,
-              base64: true,
+              quality: 0.1,
+              base64: false,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-              if (!result.assets[0]?.base64) {
+              if (!result.assets[0]?.uri) {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
                 return;
               }
@@ -688,15 +690,15 @@ export default function ViewAsistencia() {
               try {
                 console.log('[confirmIngresoRegister] Iniciando conversión de imagen...');
                 imagenBase64 = await convertImageToBase64(ingresoFoto);
-                const sizeInKB = (imagenBase64.length * 0.75 / 1024).toFixed(2);
-                const sizeInMB = (imagenBase64.length * 0.75 / 1024 / 1024).toFixed(2);
+                const imageBytes = imagenBase64.length * 0.75;
+                const sizeInKB = (imageBytes / 1024).toFixed(2);
+                const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
                 console.log('[confirmIngresoRegister] Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
-                // Validar que no exceda 5MB (limite robusto para evitar 413)
-                const MAX_BASE64_SIZE = 5 * 1024 * 1024; // 5MB
-                if (imagenBase64.length > MAX_BASE64_SIZE) {
-                  console.warn('[confirmIngresoRegister] RECHAZO: Imagen muy grande (' + sizeInMB + 'MB > 5MB)');
-                  setMessage('La imagen es demasiado grande (~' + sizeInMB + 'MB). Máximo permitido: 5MB. Intente con una foto de menor resolución o dimensiones.');
+                const MAX_IMAGE_BYTES = 700 * 1024;
+                if (imageBytes > MAX_IMAGE_BYTES) {
+                  console.warn('[confirmIngresoRegister] RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 700KB)');
+                  setMessage('La imagen excede el límite permitido para producción (' + sizeInKB + 'KB). Intente una foto más cercana o con menos detalle.');
                   return;
                 }
                 

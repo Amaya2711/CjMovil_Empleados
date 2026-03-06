@@ -557,26 +557,21 @@ export default function ViewAsistencia() {
           console.log('[redimensionarImagen] Dimensiones objetivo:', { width, height });
           
           try {
-            console.log('[redimensionarImagen] Llamando ImageManipulator.manipulateAsync...');
+            console.log('[redimensionarImagen] Llamando ImageManipulator con base64...');
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
-              { compress: 0.35, format: ImageManipulator.SaveFormat.JPEG }
+              { compress: 0.35, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
             
-            console.log('[redimensionarImagen] ✓ Resultado:', resultado.uri);
-            let finalUri = resultado.uri;
+            console.log('[redimensionarImagen] ✓ Resultado obtenido');
+            console.log('[redimensionarImagen] Base64 length:', resultado.base64?.length || 0);
             
-            // Si el resultado es content://, copiarlo a cache
-            if (finalUri.startsWith('content://')) {
-              console.log('[redimensionarImagen] ⚠ Resultado es content://, copiando a cache...');
-              const cacheUri = `${FileSystem.cacheDirectory}resized_${Date.now()}.jpg`;
-              await FileSystem.copyAsync({ from: finalUri, to: cacheUri });
-              finalUri = cacheUri;
-              console.log('[redimensionarImagen] ✓ Copiado a:', finalUri);
+            if (!resultado.base64) {
+              throw new Error('ImageManipulator no devolvió base64');
             }
             
-            return finalUri;
+            return resultado.base64;
           } catch (error) {
             console.error('[redimensionarImagen] ✗ ERROR:', error.message);
             console.error('[redimensionarImagen] Stack:', error.stack);
@@ -592,79 +587,31 @@ export default function ViewAsistencia() {
           if (!sourceUri) {
             throw new Error('Sin URI de imagen');
           }
-          console.log('[convertImageToBase64] ✓ URI válida:', sourceUri.substring(0, 60) + '...');
+          console.log('[convertImageToBase64] ✓ URI válida');
 
-          let tempOriginalFile = null;
-          let resizedFile = null;
-          
           try {
-            // Step 1: Convertir content:// a file:// si es necesario
-            if (Platform.OS === 'android' && sourceUri.startsWith('content://')) {
-              try {
-                console.log('[convertImageToBase64] → Copiando content:// a cache...');
-                tempOriginalFile = `${FileSystem.cacheDirectory}img_${Date.now()}.jpg`;
-                await FileSystem.copyAsync({ from: sourceUri, to: tempOriginalFile });
-                console.log('[convertImageToBase64] ✓ Copiado a cache:', tempOriginalFile);
-                sourceUri = tempOriginalFile;
-              } catch (error) {
-                console.error('[convertImageToBase64] ✗ Error al copiar:', error.message);
-                throw error;
-              }
-            }
-
-            // Step 2: Redimensionar
-            try {
-              const ancho = asset?.width || 800;
-              const alto = asset?.height || 600;
-              const MAX_HEIGHT = 320;
-              const ratio = ancho / alto;
-              const newHeight = Math.min(alto, MAX_HEIGHT);
-              const newWidth = Math.round(newHeight * ratio);
-              
-              console.log('[convertImageToBase64] → Redimensionando ' + ancho + 'x' + alto + ' → ' + newWidth + 'x' + newHeight);
-              resizedFile = await redimensionarImagen(sourceUri, newWidth, newHeight);
-              console.log('[convertImageToBase64] ✓ Redimensionada:', resizedFile);
-            } catch (error) {
-              console.error('[convertImageToBase64] ✗ Error redimensionar:', error.message);
-              throw error;
-            }
-
-            // Step 3: Leer como base64 (sin verificación previa)
-            let base64String = null;
-            try {
-              console.log('[convertImageToBase64] → Leyendo base64 desde:', resizedFile);
-              base64String = await FileSystem.readAsStringAsync(resizedFile, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
-              
-              if (!base64String) {
-                throw new Error('Base64 vacío');
-              }
-              
-              console.log('[convertImageToBase64] ✓ Base64 leído:', base64String.length + ' caracteres');
-              return base64String;
-            } catch (error) {
-              console.error('[convertImageToBase64] ✗ Error leer base64:', error.message);
-              throw error;
-            }
-          } finally {
-            // Limpiar temporales
-            const filesToClean = [
-              { path: tempOriginalFile, name: 'tempOriginal' },
-              { path: resizedFile, name: 'resized' }
-            ];
+            // Step 1: Redimensionar y obtener base64 directamente de ImageManipulator
+            const ancho = asset?.width || 800;
+            const alto = asset?.height || 600;
+            const MAX_HEIGHT = 320;
+            const ratio = ancho / alto;
+            const newHeight = Math.min(alto, MAX_HEIGHT);
+            const newWidth = Math.round(newHeight * ratio);
             
-            for (const file of filesToClean) {
-              if (file.path) {
-                try {
-                  await FileSystem.deleteAsync(file.path, { idempotent: true });
-                  console.log('[convertImageToBase64] ✓ Eliminado:', file.name);
-                } catch (e) {
-                  console.warn('[convertImageToBase64] ⚠ No limpió ' + file.name + ':', e.message);
-                }
-              }
+            console.log('[convertImageToBase64] → Redimensionando ' + ancho + 'x' + alto + ' → ' + newWidth + 'x' + newHeight);
+            const base64String = await redimensionarImagen(sourceUri, newWidth, newHeight);
+            
+            if (!base64String) {
+              throw new Error('Base64 vacío');
             }
+            
+            console.log('[convertImageToBase64] ✓ Base64 obtenido:', base64String.length + ' caracteres');
             console.log('[convertImageToBase64] ========== CONVERSIÓN OK ==========');
+            return base64String;
+          } catch (error) {
+            console.error('[convertImageToBase64] ✗ Error:', error.message);
+            console.error('[convertImageToBase64] Stack:', error.stack);
+            throw error;
           }
         };
 

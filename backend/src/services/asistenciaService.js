@@ -108,12 +108,17 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, co
   request.input('UsuarioAct', sql.Int, usuarioActNumber);
   request.input('pEnvio', sql.Int, pEnvio);
   request.input('Comentario', sql.NVarChar(250), comentarioValue);
-  request.input('Imagen', sql.NVarChar(250), imagenValue);
+  
+  // Separar parámetro de imagen según tipo
   if (pEnvio === 2) {
+    // SALIDA: usa ImagenSalida
+    request.input('ImagenSalida', sql.NVarChar(250), imagenValue);
     request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
     request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
     request.input('EstadoSalida', sql.Int, estadoSalidaValue);
   } else {
+    // INGRESO: usa Imagen
+    request.input('Imagen', sql.NVarChar(250), imagenValue);
     request.input('Latitud', sql.Decimal(18, 6), latValue);
     request.input('Longitud', sql.Decimal(18, 6), lonValue);
     request.input('EstadoMarcacion', sql.Int, estadoMarcacionValue);

@@ -51,6 +51,12 @@ export default function ViewAsistencia() {
   const [pendingIngresoWarning, setPendingIngresoWarning] = useState('');
   const [registerActionRunning, setRegisterActionRunning] = useState(false);
   const [confirmIngresoLoading, setConfirmIngresoLoading] = useState(false);
+  const [salidaDialogVisible, setSalidaDialogVisible] = useState(false);
+  const [salidaComentario, setSalidaComentario] = useState('');
+  const [salidaFoto, setSalidaFoto] = useState(null);
+  const [pendingSalidaCoords, setPendingSalidaCoords] = useState(null);
+  const [pendingSalidaWarning, setPendingSalidaWarning] = useState('');
+  const [confirmSalidaLoading, setConfirmSalidaLoading] = useState(false);
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
 
@@ -478,6 +484,14 @@ export default function ViewAsistencia() {
               setIngresoDialogVisible(true);
               return;
             }
+            if (tipo === 'SALIDA') {
+              setPendingSalidaCoords(coords);
+              setPendingSalidaWarning(warningMessage);
+              setSalidaComentario('');
+              setSalidaFoto(null);
+              setSalidaDialogVisible(true);
+              return;
+            }
             await executeRegister(tipo, coords, warningMessage);
           } catch (err) {
             setMessage(LOCATION_REQUIRED_MESSAGE);
@@ -577,6 +591,14 @@ export default function ViewAsistencia() {
           setIngresoFoto(null);
           setPendingIngresoCoords(null);
           setPendingIngresoWarning('');
+        };
+
+        const closeSalidaDialog = () => {
+          setSalidaDialogVisible(false);
+          setSalidaComentario('');
+          setSalidaFoto(null);
+          setPendingSalidaCoords(null);
+          setPendingSalidaWarning('');
         };
 
         const redimensionarImagen = async (sourceUri, width, height) => {
@@ -694,6 +716,108 @@ export default function ViewAsistencia() {
             console.error('[tomarFotoIngreso] ✗ Error:', error.message);
             console.error('[tomarFotoIngreso] Stack:', error.stack);
             setMessage('Error al tomar foto: ' + error.message);
+          }
+        };
+
+        const tomarFotoSalida = async () => {
+          try {
+            console.log('[tomarFotoSalida] Solicitando permiso de cámara...');
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            console.log('[tomarFotoSalida] Estado permiso cámara:', status);
+            
+            if (status !== 'granted') {
+              setMessage('Se requiere permiso de camara para tomar foto');
+              console.warn('[tomarFotoSalida] Permiso cámara rechazado');
+              return;
+            }
+            
+            console.log('[tomarFotoSalida] Abriendo cámara...');
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: false,
+              quality: 1.0,
+              base64: false,
+            });
+            
+            console.log('[tomarFotoSalida] Resultado cámara:', {
+              canceled: result.canceled,
+              assetsLength: result.assets?.length,
+            });
+            
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              console.log('[tomarFotoSalida] ✓ Foto capturada exitosamente:', {
+                uri: asset.uri,
+                width: asset.width,
+                height: asset.height,
+                type: asset.type,
+                fileName: asset.fileName,
+              });
+              
+              if (!asset?.uri) {
+                setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
+                console.error('[tomarFotoSalida] ✗ Asset sin URI');
+                return;
+              }
+              setSalidaFoto(asset);
+            } else {
+              console.log('[tomarFotoSalida] Captura cancelada por el usuario');
+            }
+          } catch (error) {
+            console.error('[tomarFotoSalida] ✗ Error:', error.message);
+            console.error('[tomarFotoSalida] Stack:', error.stack);
+            setMessage('Error al tomar foto: ' + error.message);
+          }
+        };
+
+        const seleccionarImagenSalida = async () => {
+          try {
+            console.log('[seleccionarImagenSalida] Solicitando permiso de librería de medios...');
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            console.log('[seleccionarImagenSalida] Estado permiso galería:', status);
+            
+            if (status !== 'granted') {
+              setMessage('Se requiere permiso de galeria para seleccionar foto');
+              console.warn('[seleccionarImagenSalida] Permiso galería rechazado');
+              return;
+            }
+            
+            console.log('[seleccionarImagenSalida] Abriendo galería...');
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: false,
+              quality: 1.0,
+              base64: false,
+            });
+            
+            console.log('[seleccionarImagenSalida] Resultado galería:', {
+              canceled: result.canceled,
+              assetsLength: result.assets?.length,
+            });
+            
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              console.log('[seleccionarImagenSalida] ✓ Imagen seleccionada exitosamente:', {
+                uri: asset.uri,
+                width: asset.width,
+                height: asset.height,
+                type: asset.type,
+                fileName: asset.fileName,
+              });
+              
+              if (!asset?.uri) {
+                setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
+                console.error('[seleccionarImagenSalida] ✗ Asset sin URI');
+                return;
+              }
+              setSalidaFoto(asset);
+            } else {
+              console.log('[seleccionarImagenSalida] Selección cancelada por el usuario');
+            }
+          } catch (error) {
+            console.error('[seleccionarImagenSalida] ✗ Error:', error.message);
+            console.error('[seleccionarImagenSalida] Stack:', error.stack);
+            setMessage('Error al seleccionar imagen: ' + error.message);
           }
         };
 
@@ -829,6 +953,105 @@ export default function ViewAsistencia() {
             setPendingIngresoWarning('');
           } finally {
             setConfirmIngresoLoading(false);
+          }
+        };
+
+        const confirmSalidaRegister = async () => {
+          if (confirmSalidaLoading || registerActionRunning) return;
+          const comentario = String(salidaComentario || '').trim();
+          if (!comentario) {
+            setMessage('Debe ingresar el motivo del comentario para registrar SALIDA.');
+            return;
+          }
+          if (!salidaFoto) {
+            setMessage('Debe capturar o cargar una foto de salida (obligatorio).');
+            return;
+          }
+          if (!pendingSalidaCoords) {
+            setMessage('No se pudo obtener la ubicacion actual para registrar SALIDA.');
+            return;
+          }
+          setConfirmSalidaLoading(true);
+          try {
+            let imagenBase64 = null;
+            let nombreImagen = null;
+            if (salidaFoto && (salidaFoto.uri || salidaFoto.localUri)) {
+              try {
+                console.log('[confirmSalidaRegister] ========== INICIANDO PROCESAMIENTO DE IMAGEN ==========');
+                console.log('[confirmSalidaRegister] Foto seleccionada:', {
+                  uri: salidaFoto.uri,
+                  width: salidaFoto.width,
+                  height: salidaFoto.height,
+                });
+                
+                imagenBase64 = await convertImageToBase64(salidaFoto);
+                
+                const imageBytes = imagenBase64.length * 0.75;
+                const sizeInKB = (imageBytes / 1024).toFixed(2);
+                const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
+                console.log('[confirmSalidaRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
+                
+                // Límite aumentado para permitir imágenes HD: 5MB (5120KB)
+                const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+                if (imageBytes > MAX_IMAGE_BYTES) {
+                  console.warn('[confirmSalidaRegister] ✗ RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 5MB)');
+                  setMessage('La imagen excede el límite permitido para producción (' + sizeInMB + 'MB de 5MB). Intente una foto más cercana o con menos detalle.');
+                  return;
+                }
+                
+                const d = getLimaDate();
+                const yyyy = String(d.getFullYear());
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                const codEmpArchivo = String(cuadrilla || codEmp || idusuario || 'SINCOD').trim();
+                nombreImagen = `SALIDA_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
+                console.log('[confirmSalidaRegister] ✓ Nombre de imagen asignado:', nombreImagen);
+                console.log('[confirmSalidaRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
+              } catch (error) {
+                console.error('[confirmSalidaRegister] ✗ ERROR imagen:', error.message);
+                console.error('[confirmSalidaRegister] Stack:', error.stack);
+                
+                let userMsg = 'Error al procesar imagen: ';
+                if (error.message.includes('no existe') || error.message.includes('no exists')) {
+                  userMsg += 'Archivo no accesible. Recapture la foto.';
+                } else if (error.message.includes('Redimensionamiento')) {
+                  userMsg += 'Problema al redimensionar. Intente otra foto.';
+                } else if (error.message.includes('base64') || error.message.includes('leer')) {
+                  userMsg += 'Problema al procesar. Reconecte la foto.';
+                } else if (error.message.includes('copia')) {
+                  userMsg += 'Problema de almacenamiento. Libere espacio.';
+                } else {
+                  userMsg += error.message;
+                }
+                
+                setMessage(userMsg);
+                return;
+              }
+            }
+            
+            // IMPORTANTE: Obtener comentario existente del último registro y agregarlo
+            const source = Array.isArray(data) ? data : [];
+            let comentarioCompleto = comentario;
+            if (source.length > 0) {
+              const ultimoRegistro = source[0];
+              const comentarioExistente = String(ultimoRegistro.Comentario || ultimoRegistro.comentario || '').trim();
+              if (comentarioExistente) {
+                comentarioCompleto = `${comentarioExistente} | SALIDA: ${comentario}`;
+              } else {
+                comentarioCompleto = `SALIDA: ${comentario}`;
+              }
+            } else {
+              comentarioCompleto = `SALIDA: ${comentario}`;
+            }
+            
+            await executeRegister('SALIDA', pendingSalidaCoords, pendingSalidaWarning, comentarioCompleto, imagenBase64, nombreImagen);
+            setSalidaDialogVisible(false);
+            setSalidaComentario('');
+            setSalidaFoto(null);
+            setPendingSalidaCoords(null);
+            setPendingSalidaWarning('');
+          } finally {
+            setConfirmSalidaLoading(false);
           }
         };
 
@@ -1223,6 +1446,70 @@ export default function ViewAsistencia() {
                 <Dialog.Actions>
                   <Button onPress={closeIngresoDialog} disabled={confirmIngresoLoading}>Cancelar</Button>
                   <Button onPress={confirmIngresoRegister} loading={confirmIngresoLoading} disabled={confirmIngresoLoading || registerActionRunning || !ingresoFoto}>Aceptar</Button>
+                </Dialog.Actions>
+              </Dialog>
+
+              <Dialog visible={salidaDialogVisible} onDismiss={closeSalidaDialog}>
+                <Dialog.Title>Comentario de salida</Dialog.Title>
+                <Dialog.Content>
+                  <Text style={{ marginBottom: 8 }}>Ingrese el motivo del comentario (obligatorio):</Text>
+                  <TextInput
+                    mode="outlined"
+                    value={salidaComentario}
+                    onChangeText={(value) => setSalidaComentario(String(value || '').slice(0, 250))}
+                    maxLength={250}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Escriba aquí el motivo..."
+                    textColor="#231F36"
+                    style={styles.ingresoCommentInput}
+                  />
+                  <Text style={{ marginTop: 6, textAlign: 'right', color: '#666' }}>
+                    {(salidaComentario || '').length}/250
+                  </Text>
+                  
+                  <View style={{ marginTop: 16, marginBottom: 8 }}>
+                    <Text style={{ marginBottom: 8, fontWeight: '600' }}>Foto de salida (obligatoria):</Text>
+                    {salidaFoto ? (
+                      <View style={{ marginBottom: 8 }}>
+                        <Image
+                          source={{ uri: salidaFoto.uri }}
+                          style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 8 }}
+                        />
+                        <Text style={{ color: '#4CAF50', marginBottom: 8 }}>Foto cargada correctamente</Text>
+                        <Button
+                          mode="outlined"
+                          onPress={() => setSalidaFoto(null)}
+                          disabled={confirmSalidaLoading}
+                          style={{ marginBottom: 8 }}
+                        >
+                          Cambiar foto
+                        </Button>
+                      </View>
+                    ) : (
+                      <View style={{ marginBottom: 8 }}>
+                        <Button
+                          mode="contained"
+                          onPress={tomarFotoSalida}
+                          disabled={confirmSalidaLoading}
+                          style={{ marginBottom: 8 }}
+                        >
+                          Tomar foto con camara
+                        </Button>
+                        <Button
+                          mode="outlined"
+                          onPress={seleccionarImagenSalida}
+                          disabled={confirmSalidaLoading}
+                        >
+                          Cargar imagen de galeria
+                        </Button>
+                      </View>
+                    )}
+                  </View>
+                </Dialog.Content>
+                <Dialog.Actions>
+                  <Button onPress={closeSalidaDialog} disabled={confirmSalidaLoading}>Cancelar</Button>
+                  <Button onPress={confirmSalidaRegister} loading={confirmSalidaLoading} disabled={confirmSalidaLoading || registerActionRunning || !salidaFoto}>Aceptar</Button>
                 </Dialog.Actions>
               </Dialog>
 

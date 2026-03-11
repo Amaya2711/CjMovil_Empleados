@@ -501,17 +501,19 @@ export default function ViewAsistencia() {
         };
 
         const executeRegister = async (tipo, coords, warningMessage = '', comentario = '', imagenBase64 = null, nombreImagen = null) => {
-          const usuarioAct = cuadrilla;
+          // Usar cuadrilla primero, si no está disponible usar codEmp, si tampoco, usar idusuario
+          const usuarioAct = cuadrilla || codEmp || idusuario;
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][PAYLOAD_PREP]', {
               usuarioAct,
               tipo,
               lat: coords?.latitude,
               lon: coords?.longitude,
+              source: cuadrilla ? 'cuadrilla' : (codEmp ? 'codEmp' : 'idusuario'),
             });
           }
           if (usuarioAct === null || typeof usuarioAct === 'undefined' || String(usuarioAct).trim() === '') {
-            setMessage('No se pudo registrar asistencia: cuadrilla no disponible.');
+            setMessage('No se pudo registrar asistencia: No hay identificador de empleado disponible (cuadrilla, codEmp o idusuario).');
             return;
           }
 
@@ -546,9 +548,7 @@ export default function ViewAsistencia() {
           console.log('[executeRegister][RESPONSE_COMPLETA]', JSON.stringify(res, null, 2));
           
           if (res && !res.error) {
-            let msg = warningMessage 
-              ? `${warningMessage} ${tipo} registrado correctamente` 
-              : `${tipo} registrado correctamente`;
+            let msg = `${tipo} registrado correctamente`;
             
             // 🔍 VALIDACIÓN TEMPORAL: Verificar estado de carga de imagen
             if (imagenBase64 && nombreImagen) {
@@ -875,8 +875,8 @@ export default function ViewAsistencia() {
 
         const confirmIngresoRegister = async () => {
           if (confirmIngresoLoading || registerActionRunning) return;
-          const comentario = String(ingresoComentario || '').trim();
-          if (!comentario) {
+          const comentario = 'INGRESO: ' + String(ingresoComentario || '').trim();
+          if (!comentario || comentario === 'INGRESO: ') {
             setMessage('Debe ingresar el motivo del comentario para registrar INGRESO.');
             return;
           }
@@ -1435,7 +1435,7 @@ export default function ViewAsistencia() {
                         <Button
                           mode="outlined"
                           onPress={seleccionarImagenIngreso}
-                          disabled={confirmIngresoLoading}
+                          disabled={true}
                         >
                           Cargar imagen de galeria
                         </Button>

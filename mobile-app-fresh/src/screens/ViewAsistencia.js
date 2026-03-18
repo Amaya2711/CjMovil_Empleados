@@ -61,15 +61,11 @@ export default function ViewAsistencia() {
   const mounted = useRef(true);
 
   const resolveNumericEmployeeId = useCallback(() => {
-    const candidates = [codEmp, idusuario, cuadrilla];
-    for (const candidate of candidates) {
-      if (candidate === null || typeof candidate === 'undefined') continue;
-      const value = String(candidate).trim();
-      if (!value) continue;
-      if (/^\d+$/.test(value)) return value;
-    }
-    return null;
-  }, [codEmp, idusuario, cuadrilla]);
+    if (codEmp === null || typeof codEmp === 'undefined') return null;
+    const value = String(codEmp).trim();
+    if (!value) return null;
+    return /^\d+$/.test(value) ? value : null;
+  }, [codEmp]);
 
   useEffect(() => {
     const source = Array.isArray(data) ? data : [];
@@ -279,13 +275,10 @@ export default function ViewAsistencia() {
             const idEmpleado = resolveNumericEmployeeId();
             if (!idEmpleado) {
               setData([]);
-              setApiDebug(`fetchData:invalid-idEmpleado codEmp=${String(codEmp ?? '')} idusuario=${String(idusuario ?? '')} cuadrilla=${String(cuadrilla ?? '')}`);
+              setApiDebug(`fetchData:invalid-idEmpleado codEmp=${String(codEmp ?? '')}`);
               setMessage('No se pudo cargar asistencia: el usuario no tiene un código de empleado numérico válido (CodEmp).');
               return;
             }
-            const todayLima = getLimaDate();
-            const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
-
             const constanteOficinas = await getConstanteOficinas();
             if (!mounted.current) return;
             if (constanteOficinas && !constanteOficinas.error) {
@@ -340,7 +333,7 @@ export default function ViewAsistencia() {
               }
             }
 
-            const res = await getAsistencia({ codEmp: idEmpleado, fechaAsistencia });
+            const res = await getAsistencia({ codEmp: idEmpleado });
             if (!mounted.current) return;
             if (!res) {
               setMessage('Respuesta vacía del servidor');
@@ -535,7 +528,7 @@ export default function ViewAsistencia() {
               tipo,
               lat: coords?.latitude,
               lon: coords?.longitude,
-              source: codEmp ? 'codEmp' : (idusuario ? 'idusuario' : 'cuadrilla'),
+              source: 'codEmp',
             });
           }
           if (!usuarioAct) {
@@ -627,17 +620,16 @@ export default function ViewAsistencia() {
           setPendingSalidaWarning('');
         };
 
-        const redimensionarImagen = async (sourceUri, width, height) => {
+        const redimensionarImagen = async (sourceUri, width, height, compress = 0.9) => {
           console.log('[redimensionarImagen] INICIO - sourceUri:', sourceUri);
-          console.log('[redimensionarImagen] Dimensiones objetivo:', { width, height });
+          console.log('[redimensionarImagen] Dimensiones objetivo:', { width, height, compress });
           
           try {
             console.log('[redimensionarImagen] Llamando ImageManipulator con base64...');
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
-              // Compress: 0.9 = calidad HD con pérdida mínima
-              { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+              { compress, format: ImageManipulator.SaveFormat.JPEG, base64: true }
             );
             
             console.log('[redimensionarImagen] ✓ Resultado obtenido');
@@ -666,26 +658,55 @@ export default function ViewAsistencia() {
           console.log('[convertImageToBase64] ✓ URI válida');
 
           try {
-            // Step 1: Redimensionar y obtener base64 directamente de ImageManipulator
+            // Step 1: Redimensionar y comprimir progresivamente hasta quedar bajo límite
             const ancho = asset?.width || 1920;
             const alto = asset?.height || 1080;
-            // Configuración HD para SharePoint
-            // MAX_HEIGHT: 800 (normal) | 1080 (Full HD) | 1920 (Ultra HD)
-            const MAX_HEIGHT = 1920;
             const ratio = ancho / alto;
-            const newHeight = Math.min(alto, MAX_HEIGHT);
-            const newWidth = Math.round(newHeight * ratio);
-            
-            console.log('[convertImageToBase64] → Redimensionando ' + ancho + 'x' + alto + ' → ' + newWidth + 'x' + newHeight);
-            const base64String = await redimensionarImagen(sourceUri, newWidth, newHeight);
-            
-            if (!base64String) {
+            const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+            const strategies = [
+              { maxHeight: 1920, compress: 0.9 },
+              { maxHeight: 1600, compress: 0.8 },
+              { maxHeight: 1280, compress: 0.7 },
+              { maxHeight: 1024, compress: 0.6 },
+            ];
+
+            let bestBase64 = null;
+            let bestSizeBytes = Number.POSITIVE_INFINITY;
+
+            for (const strategy of strategies) {
+              const newHeight = Math.min(alto, strategy.maxHeight);
+              const newWidth = Math.round(newHeight * ratio);
+              console.log('[convertImageToBase64] → Intento compresión', strategy, '=>', `${newWidth}x${newHeight}`);
+
+              const candidate = await redimensionarImagen(sourceUri, newWidth, newHeight, strategy.compress);
+              if (!candidate) continue;
+
+              const candidateBytes = candidate.length * 0.75;
+              console.log('[convertImageToBase64] Tamaño candidato:', Math.round(candidateBytes / 1024), 'KB');
+
+              if (candidateBytes < bestSizeBytes) {
+                bestBase64 = candidate;
+                bestSizeBytes = candidateBytes;
+              }
+
+              if (candidateBytes <= MAX_IMAGE_BYTES) {
+                bestBase64 = candidate;
+                bestSizeBytes = candidateBytes;
+                break;
+              }
+            }
+
+            if (!bestBase64) {
               throw new Error('Base64 vacío');
             }
-            
-            console.log('[convertImageToBase64] ✓ Base64 obtenido:', base64String.length + ' caracteres');
+
+            if (bestSizeBytes > MAX_IMAGE_BYTES) {
+              throw new Error(`Imagen demasiado grande tras compresión (${(bestSizeBytes / 1024 / 1024).toFixed(2)}MB)`);
+            }
+
+            console.log('[convertImageToBase64] ✓ Base64 obtenido:', bestBase64.length + ' caracteres');
             console.log('[convertImageToBase64] ========== CONVERSIÓN OK ==========');
-            return base64String;
+            return bestBase64;
           } catch (error) {
             console.error('[convertImageToBase64] ✗ Error:', error.message);
             console.error('[convertImageToBase64] Stack:', error.stack);
@@ -934,19 +955,13 @@ export default function ViewAsistencia() {
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
                 console.log('[confirmIngresoRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
-                // Límite aumentado para permitir imágenes HD: 5MB (5120KB)
-                const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-                if (imageBytes > MAX_IMAGE_BYTES) {
-                  console.warn('[confirmIngresoRegister] ✗ RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 5MB)');
-                  setMessage('La imagen excede el límite permitido para producción (' + sizeInMB + 'MB de 5MB). Intente una foto más cercana o con menos detalle.');
-                  return;
-                }
+                // convertImageToBase64 ya entrega una imagen optimizada <= 5MB o lanza error claro
                 
                 const d = getLimaDate();
                 const yyyy = String(d.getFullYear());
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
                 const dd = String(d.getDate()).padStart(2, '0');
-                const codEmpArchivo = String(cuadrilla || codEmp || idusuario || 'SINCOD').trim();
+                const codEmpArchivo = String(resolveNumericEmployeeId() || 'SINCOD').trim();
                 nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
                 console.log('[confirmIngresoRegister] ✓ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmIngresoRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
@@ -1017,19 +1032,13 @@ export default function ViewAsistencia() {
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
                 console.log('[confirmSalidaRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
-                // Límite aumentado para permitir imágenes HD: 5MB (5120KB)
-                const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-                if (imageBytes > MAX_IMAGE_BYTES) {
-                  console.warn('[confirmSalidaRegister] ✗ RECHAZO: Imagen muy grande (' + sizeInKB + 'KB > 5MB)');
-                  setMessage('La imagen excede el límite permitido para producción (' + sizeInMB + 'MB de 5MB). Intente una foto más cercana o con menos detalle.');
-                  return;
-                }
+                // convertImageToBase64 ya entrega una imagen optimizada <= 5MB o lanza error claro
                 
                 const d = getLimaDate();
                 const yyyy = String(d.getFullYear());
                 const mm = String(d.getMonth() + 1).padStart(2, '0');
                 const dd = String(d.getDate()).padStart(2, '0');
-                const codEmpArchivo = String(cuadrilla || codEmp || idusuario || 'SINCOD').trim();
+                const codEmpArchivo = String(resolveNumericEmployeeId() || 'SINCOD').trim();
                 nombreImagen = `SALIDA_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
                 console.log('[confirmSalidaRegister] ✓ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmSalidaRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
@@ -1339,6 +1348,7 @@ export default function ViewAsistencia() {
                 mode={activeTab === 'RESUMEN' ? 'contained' : 'outlined'}
                 onPress={() => {
                   setActiveTab('RESUMEN');
+                  setSelectedResumenEstado('__ALL__');
                   fetchData();
                 }}
                 style={styles.tabButton}

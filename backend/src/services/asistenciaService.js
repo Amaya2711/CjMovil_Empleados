@@ -45,7 +45,6 @@ export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
     const parsed = new Date(fechaAsistencia);
     if (!Number.isNaN(parsed.getTime())) fecha = parsed;
   }
-  if (!fecha) fecha = new Date();
   request.input('IdEmpleado', sql.VarChar(50), idEmpleado || '');
   request.input('FechaAsistencia', sql.Date, fecha);
   const result = await request.execute('sp_Asistencia_ListarMes');

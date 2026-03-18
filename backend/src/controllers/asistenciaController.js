@@ -59,6 +59,7 @@ export const registerAsistencia = async (req, res) => {
 
     let uploadResult = null;
     let imagenSharePointUrl = null;
+    let imagenDbValue = null;
     if (imagenBase64) {
       console.log('[registerAsistencia][IMAGE_DETECTED] Preparando carga a SharePoint...');
       console.log('[registerAsistencia][IMAGE_INFO]', {
@@ -73,6 +74,8 @@ export const registerAsistencia = async (req, res) => {
         
         if (uploadResult.success) {
           imagenSharePointUrl = uploadResult.fileUrl || null;
+          // En SQL guardamos una referencia corta para evitar errores de truncamiento.
+          imagenDbValue = uploadResult.fileName || nombreImagenFinal;
           console.log('[registerAsistencia][✅ SUCCESS] Imagen subida exitosamente');
           console.log('[registerAsistencia][IMAGE_URL]', imagenSharePointUrl || 'N/A');
         } else {
@@ -97,11 +100,43 @@ export const registerAsistencia = async (req, res) => {
         comentario,
         estadoMarcacion,
         estadoSalida,
-        imagen: imagenSharePointUrl,
+        imagen: imagenDbValue,
       });
     } catch (error) {
       const errorMsg = error?.message || String(error);
       console.error('[registerAsistencia][SERVICE_ERROR]', errorMsg);
+
+      const imageFieldError =
+        /String or binary data would be truncated/i.test(errorMsg) ||
+        /Error converting data type/i.test(errorMsg) ||
+        /Error converting .* data type/i.test(errorMsg);
+
+      if (imageFieldError && imagenDbValue) {
+        console.warn('[registerAsistencia][SERVICE_RETRY_NO_IMAGE] Reintentando registro sin campo imagen en BD');
+        try {
+          result = await registerAsistenciaService({
+            usuarioAct: usuarioActValue,
+            tipo,
+            lat,
+            lon,
+            comentario,
+            estadoMarcacion,
+            estadoSalida,
+            imagen: null,
+          });
+
+          return res.json({
+            success: true,
+            result,
+            imageUpload: uploadResult,
+            imagen: imagenSharePointUrl,
+            warning: 'Asistencia registrada, pero no se pudo guardar la referencia de imagen en la base de datos.',
+          });
+        } catch (retryError) {
+          const retryMsg = retryError?.message || String(retryError);
+          console.error('[registerAsistencia][SERVICE_RETRY_NO_IMAGE_ERROR]', retryMsg);
+        }
+      }
       
       // Analizar errores comunes de la base de datos
       if (errorMsg.includes('Violation of PRIMARY KEY constraint')) {

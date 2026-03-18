@@ -12,9 +12,15 @@ export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
     if (fechaAsistencia) params.append('fechaAsistencia', fechaAsistencia);
     const query = params.toString();
     if (query) url += `?${query}`;
+    console.log('[getAsistencia][REQUEST]', { url, codEmp, fechaAsistencia });
     const res = await fetch(url);
-    if (!res.ok) throw new Error('Error al obtener asistencia');
-    return await res.json();
+    const payload = await res.json().catch(() => null);
+    console.log('[getAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
+    if (!res.ok) {
+      const detail = payload?.message || payload?.error || null;
+      throw new Error(detail ? `Error al obtener asistencia (${res.status}): ${detail}` : `Error al obtener asistencia (${res.status})`);
+    }
+    return payload;
   } catch (error) {
     return { error: true, message: error.message };
   }

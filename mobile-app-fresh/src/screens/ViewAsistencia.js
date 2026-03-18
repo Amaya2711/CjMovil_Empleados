@@ -60,6 +60,17 @@ export default function ViewAsistencia() {
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
 
+  const resolveNumericEmployeeId = useCallback(() => {
+    const candidates = [codEmp, idusuario, cuadrilla];
+    for (const candidate of candidates) {
+      if (candidate === null || typeof candidate === 'undefined') continue;
+      const value = String(candidate).trim();
+      if (!value) continue;
+      if (/^\d+$/.test(value)) return value;
+    }
+    return null;
+  }, [codEmp, idusuario, cuadrilla]);
+
   useEffect(() => {
     const source = Array.isArray(data) ? data : [];
     console.log('[ViewAsistencia][RESUMEN] Total de registros:', source.length);
@@ -265,7 +276,13 @@ export default function ViewAsistencia() {
         const fetchData = async () => {
           setLoading(true);
           try {
-            const idEmpleado = cuadrilla || codEmp || idusuario;
+            const idEmpleado = resolveNumericEmployeeId();
+            if (!idEmpleado) {
+              setData([]);
+              setApiDebug(`fetchData:invalid-idEmpleado codEmp=${String(codEmp ?? '')} idusuario=${String(idusuario ?? '')} cuadrilla=${String(cuadrilla ?? '')}`);
+              setMessage('No se pudo cargar asistencia: el usuario no tiene un código de empleado numérico válido (CodEmp).');
+              return;
+            }
             const todayLima = getLimaDate();
             const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
 
@@ -442,6 +459,9 @@ export default function ViewAsistencia() {
         const handleRegister = async (tipo) => {
           if (registerActionRunning) return;
           setRegisterActionRunning(true);
+          if (tipo === 'INGRESO') {
+            console.log('[INGRESO][CLICK] Botón INGRESO presionado');
+          }
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][CLICK] Botón SALIDA presionado');
           }
@@ -459,6 +479,13 @@ export default function ViewAsistencia() {
           }
           try {
             const coords = await getCurrentPosition();
+            if (tipo === 'INGRESO') {
+              console.log('[INGRESO][COORDS]', {
+                latitude: coords?.latitude,
+                longitude: coords?.longitude,
+                accuracy: coords?.accuracy,
+              });
+            }
             if (tipo === 'SALIDA') {
               console.log('[SALIDA][COORDS]', {
                 latitude: coords?.latitude,
@@ -501,19 +528,18 @@ export default function ViewAsistencia() {
         };
 
         const executeRegister = async (tipo, coords, warningMessage = '', comentario = '', imagenBase64 = null, nombreImagen = null) => {
-          // Usar cuadrilla primero, si no está disponible usar codEmp, si tampoco, usar idusuario
-          const usuarioAct = cuadrilla || codEmp || idusuario;
+          const usuarioAct = resolveNumericEmployeeId();
           if (tipo === 'SALIDA') {
             console.log('[SALIDA][PAYLOAD_PREP]', {
               usuarioAct,
               tipo,
               lat: coords?.latitude,
               lon: coords?.longitude,
-              source: cuadrilla ? 'cuadrilla' : (codEmp ? 'codEmp' : 'idusuario'),
+              source: codEmp ? 'codEmp' : (idusuario ? 'idusuario' : 'cuadrilla'),
             });
           }
-          if (usuarioAct === null || typeof usuarioAct === 'undefined' || String(usuarioAct).trim() === '') {
-            setMessage('No se pudo registrar asistencia: No hay identificador de empleado disponible (cuadrilla, codEmp o idusuario).');
+          if (!usuarioAct) {
+            setMessage('No se pudo registrar asistencia: no hay un código de empleado numérico válido (CodEmp).');
             return;
           }
 

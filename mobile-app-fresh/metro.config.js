@@ -3,6 +3,11 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
+// Configura el puerto 8083 para Metro
+config.server = {
+  port: 8083,
+};
+
 // Fuerza axios a usar el build "browser" (evita axios/dist/node que requiere crypto)
 const originalResolveRequest = config.resolver.resolveRequest;
 

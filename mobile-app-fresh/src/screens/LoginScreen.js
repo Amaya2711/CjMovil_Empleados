@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { View, StyleSheet, Image, Platform } from 'react-native';
+import { View, StyleSheet, Image, Platform, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { TextInput, Button, Card, Snackbar } from 'react-native-paper';
 
 import axios from 'axios';
@@ -86,63 +86,69 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Card style={styles.card}>
-        <View style={styles.logoContainer}>
-          <Image source={CJTelecomLogo} style={styles.logo} resizeMode="contain" />
-        </View>
-
-        <Card.Content>
-          <TextInput
-            label="Usuario"
-            value={usuario}
-            onChangeText={setUsuario}
-            autoCapitalize="none"
-            style={styles.input}
-          />
-
-          <TextInput
-            label="Contraseña"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            style={styles.input}
-            right={
-              <TextInput.Icon
-                icon={showPassword ? 'eye-off' : 'eye'}
-                onPress={() => setShowPassword(!showPassword)}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+        <View style={styles.container}>
+          <Card style={styles.card}>
+            <View style={styles.logoContainer}>
+              <Image source={CJTelecomLogo} style={styles.logo} resizeMode="contain" />
+            </View>
+            <Card.Content>
+              <TextInput
+                label="Usuario"
+                value={usuario}
+                onChangeText={setUsuario}
+                autoCapitalize="none"
+                style={styles.input}
               />
-            }
-          />
-
-          <Button
-            mode="contained"
-            onPress={handleLogin}
-            loading={loading}
-            style={styles.button}
+              <TextInput
+                label="Contraseña"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                style={styles.input}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                  />
+                }
+              />
+              <Button
+                mode="contained"
+                onPress={handleLogin}
+                loading={loading}
+                style={styles.button}
+              >
+                Entrar
+              </Button>
+            </Card.Content>
+          </Card>
+          <Snackbar
+            visible={!!error}
+            onDismiss={() => setError('')}
+            duration={3000}
           >
-            Entrar
-          </Button>
-        </Card.Content>
-      </Card>
-
-      <Snackbar
-        visible={!!error}
-        onDismiss={() => setError('')}
-        duration={3000}
-      >
-        {error}
-      </Snackbar>
-    </View>
+            {error}
+          </Snackbar>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    minHeight: '100vh',
+    backgroundColor: '#231F36',
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
     padding: 16,
-    backgroundColor: '#231F36'
+    backgroundColor: 'transparent',
   },
   card: {
     borderRadius: 16,

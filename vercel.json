@@ -1,7 +1,6 @@
 {
-  "buildCommand": "npx expo export -p web",
-  "installCommand": "npm install --legacy-peer-deps",
-  "outputDirectory": "dist",
+  "buildCommand": "cd mobile-app-fresh && npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "mobile-app-fresh/dist",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/:path*", "destination": "/" }

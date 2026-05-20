@@ -87,7 +87,11 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.container}>
           <Card style={styles.card}>
             <View style={styles.logoContainer}>
@@ -138,11 +142,15 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  scrollView: Platform.select({
+    web: { height: '100vh', backgroundColor: '#231F36' },
+    default: { flex: 1, backgroundColor: '#231F36' },
+  }),
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#231F36',
+    backgroundColor: 'transparent',
+    minHeight: Platform.OS === 'web' ? '100vh' : undefined,
   },
   container: {
     flex: 1,

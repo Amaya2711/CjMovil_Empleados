@@ -630,6 +630,7 @@ export default function ViewAsistencia() {
 
         const deleteIfExists = async (uri) => {
           if (!uri) return;
+          if (Platform.OS === 'web') return;
           try {
             const info = await FileSystem.getInfoAsync(uri);
             if (info.exists) {
@@ -685,6 +686,34 @@ export default function ViewAsistencia() {
           }
         };
 
+        const redimensionarImagenWeb = async (sourceUri, width, height, compress = 0.9) => {
+          console.log('[redimensionarImagenWeb] INICIO - sourceUri:', sourceUri);
+          console.log('[redimensionarImagenWeb] Dimensiones objetivo:', { width, height, compress });
+
+          try {
+            const resultado = await ImageManipulator.manipulateAsync(
+              sourceUri,
+              [{ resize: { width, height } }],
+              { compress, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
+
+            if (!resultado?.base64) {
+              throw new Error('ImageManipulator no devolvio base64 en web');
+            }
+
+            console.log('[redimensionarImagenWeb] Base64 generado:', {
+              width: resultado.width,
+              height: resultado.height,
+              base64Length: resultado.base64.length,
+            });
+            return resultado;
+          } catch (error) {
+            console.error('[redimensionarImagenWeb] Error:', error.message);
+            console.error('[redimensionarImagenWeb] Stack:', error.stack);
+            throw new Error(`Redimensionamiento web fallido: ${error.message}`);
+          }
+        };
+
         const convertImageToBase64 = async (asset) => {
           console.log('[convertImageToBase64] ========== CONVERSION INICIO ==========');
           console.log('[convertImageToBase64] Asset:', { uri: asset?.uri, width: asset?.width, height: asset?.height });
@@ -699,8 +728,6 @@ export default function ViewAsistencia() {
           const tempUris = [];
 
           try {
-            localSource = await ensureLocalFileUri(sourceUri, 'asistencia_original');
-            const sourceUriForProcessing = localSource.uri;
             const ancho = asset?.width || 1920;
             const alto = asset?.height || 1080;
             const ratio = ancho / alto;
@@ -708,35 +735,63 @@ export default function ViewAsistencia() {
             let bestSizeBytes = Number.POSITIVE_INFINITY;
             let bestUri = null;
 
-            for (const strategy of IMAGE_COMPRESSION_STRATEGIES) {
-              const newHeight = Math.min(alto, strategy.maxHeight);
-              const newWidth = Math.max(1, Math.round(newHeight * ratio));
-              console.log('[convertImageToBase64] Intento seguro', strategy, '=>', `${newWidth}x${newHeight}`);
+            if (Platform.OS === 'web') {
+              for (const strategy of IMAGE_COMPRESSION_STRATEGIES) {
+                const newHeight = Math.min(alto, strategy.maxHeight);
+                const newWidth = Math.max(1, Math.round(newHeight * ratio));
+                console.log('[convertImageToBase64] Intento web', strategy, '=>', `${newWidth}x${newHeight}`);
 
-              const candidate = await redimensionarImagen(sourceUriForProcessing, newWidth, newHeight, strategy.compress);
-              if (!candidate?.uri) continue;
-              tempUris.push(candidate.uri);
+                const candidate = await redimensionarImagenWeb(sourceUri, newWidth, newHeight, strategy.compress);
+                const candidateBase64 = candidate?.base64 || null;
+                if (!candidateBase64) continue;
 
-              const fileInfo = await FileSystem.getInfoAsync(candidate.uri);
-              if (!fileInfo.exists) {
-                console.warn('[convertImageToBase64] Temporal no disponible:', candidate.uri);
-                continue;
+                const candidateBytes = candidateBase64.length * 0.75;
+                console.log('[convertImageToBase64] Tamano candidato web:', Math.round(candidateBytes / 1024), 'KB');
+
+                if (candidateBytes < bestSizeBytes) {
+                  bestBase64 = candidateBase64;
+                  bestSizeBytes = candidateBytes;
+                  bestUri = candidate?.uri || sourceUri;
+                }
+
+                if (candidateBytes <= MAX_UPLOAD_IMAGE_BYTES) {
+                  break;
+                }
               }
+            } else {
+              localSource = await ensureLocalFileUri(sourceUri, 'asistencia_original');
+              const sourceUriForProcessing = localSource.uri;
 
-              const candidateBase64 = await FileSystem.readAsStringAsync(candidate.uri, {
-                encoding: FileSystem.EncodingType.Base64,
-              });
-              const candidateBytes = candidateBase64.length * 0.75;
-              console.log('[convertImageToBase64] Tamano candidato seguro:', Math.round(candidateBytes / 1024), 'KB');
+              for (const strategy of IMAGE_COMPRESSION_STRATEGIES) {
+                const newHeight = Math.min(alto, strategy.maxHeight);
+                const newWidth = Math.max(1, Math.round(newHeight * ratio));
+                console.log('[convertImageToBase64] Intento seguro', strategy, '=>', `${newWidth}x${newHeight}`);
 
-              if (candidateBytes < bestSizeBytes) {
-                bestBase64 = candidateBase64;
-                bestSizeBytes = candidateBytes;
-                bestUri = candidate.uri;
-              }
+                const candidate = await redimensionarImagen(sourceUriForProcessing, newWidth, newHeight, strategy.compress);
+                if (!candidate?.uri) continue;
+                tempUris.push(candidate.uri);
 
-              if (candidateBytes <= MAX_UPLOAD_IMAGE_BYTES) {
-                break;
+                const fileInfo = await FileSystem.getInfoAsync(candidate.uri);
+                if (!fileInfo.exists) {
+                  console.warn('[convertImageToBase64] Temporal no disponible:', candidate.uri);
+                  continue;
+                }
+
+                const candidateBase64 = await FileSystem.readAsStringAsync(candidate.uri, {
+                  encoding: FileSystem.EncodingType.Base64,
+                });
+                const candidateBytes = candidateBase64.length * 0.75;
+                console.log('[convertImageToBase64] Tamano candidato seguro:', Math.round(candidateBytes / 1024), 'KB');
+
+                if (candidateBytes < bestSizeBytes) {
+                  bestBase64 = candidateBase64;
+                  bestSizeBytes = candidateBytes;
+                  bestUri = candidate.uri;
+                }
+
+                if (candidateBytes <= MAX_UPLOAD_IMAGE_BYTES) {
+                  break;
+                }
               }
             }
 

@@ -27,6 +27,14 @@ export default function ViewAsistencia() {
   const SHOW_SALIDA_BUTTON = true;
   const MAX_DISTANCE_METERS = 50;
   const MAX_GPS_ACCURACY_METERS = 20;
+  const IMAGE_PICKER_QUALITY = 0.5;
+  const MAX_UPLOAD_IMAGE_BYTES = 5 * 1024 * 1024;
+  const IMAGE_COMPRESSION_STRATEGIES = [
+    { maxHeight: 1280, compress: 0.55 },
+    { maxHeight: 960, compress: 0.45 },
+    { maxHeight: 720, compress: 0.35 },
+    { maxHeight: 600, compress: 0.25 },
+  ];
   const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicación para registrar INGRESO o SALIDA. Sin ubicación no se grabará la marcación.';
   const { codEmp, idusuario, cuadrilla } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('REGISTRO');
@@ -620,97 +628,141 @@ export default function ViewAsistencia() {
           setPendingSalidaWarning('');
         };
 
+        const deleteIfExists = async (uri) => {
+          if (!uri) return;
+          try {
+            const info = await FileSystem.getInfoAsync(uri);
+            if (info.exists) {
+              await FileSystem.deleteAsync(uri, { idempotent: true });
+            }
+          } catch (error) {
+            console.warn('[deleteIfExists] No se pudo eliminar temporal:', uri, error?.message);
+          }
+        };
+
+        const ensureLocalFileUri = async (sourceUri, prefix = 'asistencia') => {
+          if (!sourceUri) {
+            throw new Error('Sin URI de imagen');
+          }
+
+          if (Platform.OS !== 'android' || !sourceUri.startsWith('content://')) {
+            return { uri: sourceUri, isTemp: false };
+          }
+
+          const safePrefix = String(prefix).replace(/[^a-z0-9_-]/gi, '_');
+          const targetUri = `${FileSystem.cacheDirectory}${safePrefix}_${Date.now()}.jpg`;
+          console.log('[ensureLocalFileUri] Copiando content:// a cache:', targetUri);
+          await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
+          return { uri: targetUri, isTemp: true };
+        };
+
         const redimensionarImagen = async (sourceUri, width, height, compress = 0.9) => {
           console.log('[redimensionarImagen] INICIO - sourceUri:', sourceUri);
           console.log('[redimensionarImagen] Dimensiones objetivo:', { width, height, compress });
-          
+
           try {
-            console.log('[redimensionarImagen] Llamando ImageManipulator con base64...');
+            console.log('[redimensionarImagen] Procesando con salida a archivo temporal...');
             const resultado = await ImageManipulator.manipulateAsync(
               sourceUri,
               [{ resize: { width, height } }],
-              { compress, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+              { compress, format: ImageManipulator.SaveFormat.JPEG, base64: false }
             );
-            
-            console.log('[redimensionarImagen] ✓ Resultado obtenido');
-            console.log('[redimensionarImagen] Base64 length:', resultado.base64?.length || 0);
-            
-            if (!resultado.base64) {
-              throw new Error('ImageManipulator no devolvió base64');
+
+            if (!resultado?.uri) {
+              throw new Error('ImageManipulator no devolvio archivo');
             }
-            
-            return resultado.base64;
+
+            console.log('[redimensionarImagen] Archivo temporal generado:', {
+              uri: resultado.uri,
+              width: resultado.width,
+              height: resultado.height,
+            });
+            return resultado;
           } catch (error) {
-            console.error('[redimensionarImagen] ✗ ERROR:', error.message);
-            console.error('[redimensionarImagen] Stack:', error.stack);
+            console.error('[redimensionarImagen] Error en ruta segura:', error.message);
+            console.error('[redimensionarImagen] Stack ruta segura:', error.stack);
             throw new Error(`Redimensionamiento fallido: ${error.message}`);
           }
         };
 
         const convertImageToBase64 = async (asset) => {
-          console.log('[convertImageToBase64] ========== CONVERSIÓN INICIO ==========');
+          console.log('[convertImageToBase64] ========== CONVERSION INICIO ==========');
           console.log('[convertImageToBase64] Asset:', { uri: asset?.uri, width: asset?.width, height: asset?.height });
-          
-          let sourceUri = asset?.uri || asset?.localUri;
+
+          const sourceUri = asset?.uri || asset?.localUri;
           if (!sourceUri) {
             throw new Error('Sin URI de imagen');
           }
-          console.log('[convertImageToBase64] ✓ URI válida');
+          console.log('[convertImageToBase64] URI valida');
+
+          let localSource = null;
+          const tempUris = [];
 
           try {
-            // Step 1: Redimensionar y comprimir progresivamente hasta quedar bajo límite
+            localSource = await ensureLocalFileUri(sourceUri, 'asistencia_original');
+            const sourceUriForProcessing = localSource.uri;
             const ancho = asset?.width || 1920;
             const alto = asset?.height || 1080;
             const ratio = ancho / alto;
-            const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-            const strategies = [
-              { maxHeight: 1920, compress: 0.9 },
-              { maxHeight: 1600, compress: 0.8 },
-              { maxHeight: 1280, compress: 0.7 },
-              { maxHeight: 1024, compress: 0.6 },
-            ];
-
             let bestBase64 = null;
             let bestSizeBytes = Number.POSITIVE_INFINITY;
+            let bestUri = null;
 
-            for (const strategy of strategies) {
+            for (const strategy of IMAGE_COMPRESSION_STRATEGIES) {
               const newHeight = Math.min(alto, strategy.maxHeight);
-              const newWidth = Math.round(newHeight * ratio);
-              console.log('[convertImageToBase64] → Intento compresión', strategy, '=>', `${newWidth}x${newHeight}`);
+              const newWidth = Math.max(1, Math.round(newHeight * ratio));
+              console.log('[convertImageToBase64] Intento seguro', strategy, '=>', `${newWidth}x${newHeight}`);
 
-              const candidate = await redimensionarImagen(sourceUri, newWidth, newHeight, strategy.compress);
-              if (!candidate) continue;
+              const candidate = await redimensionarImagen(sourceUriForProcessing, newWidth, newHeight, strategy.compress);
+              if (!candidate?.uri) continue;
+              tempUris.push(candidate.uri);
 
-              const candidateBytes = candidate.length * 0.75;
-              console.log('[convertImageToBase64] Tamaño candidato:', Math.round(candidateBytes / 1024), 'KB');
-
-              if (candidateBytes < bestSizeBytes) {
-                bestBase64 = candidate;
-                bestSizeBytes = candidateBytes;
+              const fileInfo = await FileSystem.getInfoAsync(candidate.uri);
+              if (!fileInfo.exists) {
+                console.warn('[convertImageToBase64] Temporal no disponible:', candidate.uri);
+                continue;
               }
 
-              if (candidateBytes <= MAX_IMAGE_BYTES) {
-                bestBase64 = candidate;
+              const candidateBase64 = await FileSystem.readAsStringAsync(candidate.uri, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              const candidateBytes = candidateBase64.length * 0.75;
+              console.log('[convertImageToBase64] Tamano candidato seguro:', Math.round(candidateBytes / 1024), 'KB');
+
+              if (candidateBytes < bestSizeBytes) {
+                bestBase64 = candidateBase64;
                 bestSizeBytes = candidateBytes;
+                bestUri = candidate.uri;
+              }
+
+              if (candidateBytes <= MAX_UPLOAD_IMAGE_BYTES) {
                 break;
               }
             }
 
             if (!bestBase64) {
-              throw new Error('Base64 vacío');
+              throw new Error('Base64 vacio');
             }
 
-            if (bestSizeBytes > MAX_IMAGE_BYTES) {
-              throw new Error(`Imagen demasiado grande tras compresión (${(bestSizeBytes / 1024 / 1024).toFixed(2)}MB)`);
+            if (bestSizeBytes > MAX_UPLOAD_IMAGE_BYTES) {
+              throw new Error(`Imagen demasiado grande tras compresion (${(bestSizeBytes / 1024 / 1024).toFixed(2)}MB)`);
             }
 
-            console.log('[convertImageToBase64] ✓ Base64 obtenido:', bestBase64.length + ' caracteres');
-            console.log('[convertImageToBase64] ========== CONVERSIÓN OK ==========');
+            console.log('[convertImageToBase64] Mejor archivo temporal:', bestUri);
+            console.log('[convertImageToBase64] Base64 obtenido:', bestBase64.length + ' caracteres');
+            console.log('[convertImageToBase64] ========== CONVERSION OK ==========');
             return bestBase64;
           } catch (error) {
-            console.error('[convertImageToBase64] ✗ Error:', error.message);
-            console.error('[convertImageToBase64] Stack:', error.stack);
+            console.error('[convertImageToBase64] Error en ruta segura:', error.message);
+            console.error('[convertImageToBase64] Stack ruta segura:', error.stack);
             throw error;
+          } finally {
+            if (localSource?.isTemp) {
+              await deleteIfExists(localSource.uri);
+            }
+            for (const tempUri of tempUris) {
+              await deleteIfExists(tempUri);
+            }
           }
         };
 
@@ -731,7 +783,7 @@ export default function ViewAsistencia() {
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               // Quality: 1.0 = sin compresión (máxima calidad HD)
-              quality: 1.0,
+              quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
@@ -782,7 +834,7 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 1.0,
+              quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
@@ -833,7 +885,7 @@ export default function ViewAsistencia() {
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              quality: 1.0,
+              quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
@@ -885,7 +937,7 @@ export default function ViewAsistencia() {
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               // Quality: 1.0 = sin compresión (máxima calidad HD)
-              quality: 1.0,
+              quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
@@ -1535,7 +1587,7 @@ export default function ViewAsistencia() {
                         <Button
                           mode="outlined"
                           onPress={seleccionarImagenSalida}
-                          disabled={confirmSalidaLoading}
+                          disabled={true}
                         >
                           Cargar imagen de galeria
                         </Button>

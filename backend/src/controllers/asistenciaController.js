@@ -153,14 +153,28 @@ export const registerAsistencia = async (req, res) => {
       return res.status(500).json({ message: errorMsg || 'Error al registrar asistencia 1' });
     }
     
+    const resultRows = Array.isArray(result) ? result : [];
+    const asistenciaRegistrada = resultRows.length > 0;
+
     console.log('[registerAsistencia][FINAL_RESPONSE]', {
-      asistenciaRegistrada: true,
+      asistenciaRegistrada,
+      resultRows: resultRows.length,
       imagenEnviada: !!imagenBase64,
       imagenSubida: uploadResult?.success || false,
       imagenSharePointUrl: imagenSharePointUrl || null,
     });
+
+    if (!asistenciaRegistrada) {
+      return res.status(409).json({
+        success: false,
+        message: 'La marcacion no fue registrada por la base de datos. Verifique restricciones de asistencia o intente nuevamente.',
+        result: resultRows,
+        imageUpload: uploadResult,
+        imagen: imagenSharePointUrl,
+      });
+    }
     
-    res.json({ success: true, result, imageUpload: uploadResult, imagen: imagenSharePointUrl });
+    res.json({ success: true, result: resultRows, imageUpload: uploadResult, imagen: imagenSharePointUrl });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

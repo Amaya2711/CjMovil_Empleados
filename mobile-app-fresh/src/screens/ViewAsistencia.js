@@ -582,7 +582,7 @@ export default function ViewAsistencia() {
           // Log completo de la respuesta para debugging
           console.log('[executeRegister][RESPONSE_COMPLETA]', JSON.stringify(res, null, 2));
           
-          if (res && !res.error) {
+          if (res && !res.error && res.success === true) {
             let msg = `${tipo} registrado correctamente`;
             
             // 🔍 VALIDACIÓN TEMPORAL: Verificar estado de carga de imagen

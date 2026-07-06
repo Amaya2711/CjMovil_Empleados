@@ -1,5 +1,20 @@
 import { getConnection, sql } from '../db/mssql.js';
 
+const parseAsistenciaDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  const raw = String(value).trim();
+  const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) {
+    const [, yyyy, mm, dd] = ymdMatch;
+    return new Date(Number(yyyy), Number(mm) - 1, Number(dd), 12, 0, 0, 0);
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 // Obtiene el offset de zona horaria actual del servidor en minutos
 // Ej: UTC-5 (Perú) = 300 minutos
 const getServerTimezoneOffset = () => {
@@ -40,11 +55,7 @@ const formatTimeFromSQL = (value) => {
 export const getAsistenciaService = async (idEmpleado, fechaAsistencia) => {
   const pool = await getConnection();
   const request = pool.request();
-  let fecha = null;
-  if (fechaAsistencia) {
-    const parsed = new Date(fechaAsistencia);
-    if (!Number.isNaN(parsed.getTime())) fecha = parsed;
-  }
+  const fecha = parseAsistenciaDate(fechaAsistencia);
   request.input('IdEmpleado', sql.VarChar(50), idEmpleado || '');
   request.input('FechaAsistencia', sql.Date, fecha);
   const result = await request.execute('sp_Asistencia_ListarMes');
@@ -167,7 +178,7 @@ export const startAsistenciaTrackingSessionService = async ({
   accuracyIngreso,
 }) => {
   const pool = await getConnection();
-  const fechaValue = fechaAsistencia ? new Date(fechaAsistencia) : new Date();
+  const fechaValue = parseAsistenciaDate(fechaAsistencia) || new Date();
   const codEmpValue = String(codEmp || usuarioAct || '').trim();
   const usuarioActValue = Number.isFinite(Number(usuarioAct)) ? Number(usuarioAct) : null;
   const plataformaValue = String(plataforma || '').trim().slice(0, 20) || null;

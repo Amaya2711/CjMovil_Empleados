@@ -9,6 +9,7 @@ import {
 } from '../../api/asistenciaTracking';
 import {
   ENABLE_BACKGROUND_LOCATION_TRACKING,
+  ENABLE_BACKGROUND_LOCATION_UPDATES,
   TRACKING_BATCH_SIZE,
   TRACKING_DEFERRED_DISTANCE_METERS,
   TRACKING_DEFERRED_INTERVAL_MS,
@@ -171,21 +172,23 @@ export const startTrackingSession = async ({
     return { started: false, skipped: true, reason: 'tracking_disabled' };
   }
 
-  const foregroundPermission = await Location.requestForegroundPermissionsAsync();
-  if (foregroundPermission.status !== 'granted') {
-    return { started: false, reason: 'foreground_permission_denied' };
-  }
+  if (ENABLE_BACKGROUND_LOCATION_UPDATES) {
+    const foregroundPermission = await Location.requestForegroundPermissionsAsync();
+    if (foregroundPermission.status !== 'granted') {
+      return { started: false, reason: 'foreground_permission_denied' };
+    }
 
-  const backgroundPermission = await Location.requestBackgroundPermissionsAsync();
-  if (backgroundPermission.status !== 'granted') {
-    return { started: false, reason: 'background_permission_denied' };
-  }
+    const backgroundPermission = await Location.requestBackgroundPermissionsAsync();
+    if (backgroundPermission.status !== 'granted') {
+      return { started: false, reason: 'background_permission_denied' };
+    }
 
-  await flushQueuedPoints();
+    await flushQueuedPoints();
 
-  const isAlreadyRunning = await Location.hasStartedLocationUpdatesAsync(TRACKING_TASK_NAME);
-  if (isAlreadyRunning) {
-    await Location.stopLocationUpdatesAsync(TRACKING_TASK_NAME);
+    const isAlreadyRunning = await Location.hasStartedLocationUpdatesAsync(TRACKING_TASK_NAME);
+    if (isAlreadyRunning) {
+      await Location.stopLocationUpdatesAsync(TRACKING_TASK_NAME);
+    }
   }
 
   const sessionResponse = await startTrackingSessionRequest({
@@ -209,6 +212,14 @@ export const startTrackingSession = async ({
 
   await writeSession(session);
   await writeQueue([]);
+
+  if (!ENABLE_BACKGROUND_LOCATION_UPDATES) {
+    return {
+      started: true,
+      sessionId: session.sessionId,
+      backgroundUpdates: false,
+    };
+  }
 
   const options = {
     accuracy: Location.Accuracy.Balanced,
@@ -242,10 +253,14 @@ export const stopTrackingSession = async ({
   }
 
   const session = await readSession();
-  const flushResult = await flushQueuedPoints();
-  const isRunning = await Location.hasStartedLocationUpdatesAsync(TRACKING_TASK_NAME);
-  if (isRunning) {
-    await Location.stopLocationUpdatesAsync(TRACKING_TASK_NAME);
+  let flushResult = { sent: 0, skipped: true };
+
+  if (ENABLE_BACKGROUND_LOCATION_UPDATES) {
+    flushResult = await flushQueuedPoints();
+    const isRunning = await Location.hasStartedLocationUpdatesAsync(TRACKING_TASK_NAME);
+    if (isRunning) {
+      await Location.stopLocationUpdatesAsync(TRACKING_TASK_NAME);
+    }
   }
 
   if (session?.sessionId) {

@@ -4,6 +4,22 @@ import { uploadImageSafely } from '../services/sharePointService.js';
 
 const ASISTENCIA_BACKEND_DEPLOY_MARKER = 'backend-2026-07-06-v2';
 
+const resolveAsistenciaDateParts = (fechaAsistencia) => {
+  const raw = String(fechaAsistencia || '').trim();
+  const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymdMatch) {
+    const [, yyyy, mm, dd] = ymdMatch;
+    return { yyyy, mm, dd };
+  }
+
+  const fallback = new Date();
+  return {
+    yyyy: String(fallback.getFullYear()),
+    mm: String(fallback.getMonth() + 1).padStart(2, '0'),
+    dd: String(fallback.getDate()).padStart(2, '0'),
+  };
+};
+
 export const getAsistencia = async (req, res) => {
   try {
     res.setHeader('X-Asistencia-Backend-Version', ASISTENCIA_BACKEND_DEPLOY_MARKER);
@@ -53,13 +69,7 @@ export const registerAsistencia = async (req, res) => {
 
     const tipoNormalizado = String(tipo || '').trim().toUpperCase() === 'SALIDA' ? 'SALIDA' : 'INGRESO';
     const codEmpArchivo = String(codEmp || usuarioActValue || '').trim() || 'SINCOD';
-    const fechaBase = fechaAsistencia ? new Date(fechaAsistencia) : new Date();
-    const fechaArchivo = Number.isNaN(fechaBase.getTime())
-      ? new Date()
-      : fechaBase;
-    const yyyy = String(fechaArchivo.getFullYear());
-    const mm = String(fechaArchivo.getMonth() + 1).padStart(2, '0');
-    const dd = String(fechaArchivo.getDate()).padStart(2, '0');
+    const { yyyy, mm, dd } = resolveAsistenciaDateParts(fechaAsistencia);
     const nombreImagenFinal = `${tipoNormalizado}_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
 
     let uploadResult = null;

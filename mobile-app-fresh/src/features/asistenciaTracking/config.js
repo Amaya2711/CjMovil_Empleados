@@ -2,8 +2,9 @@ import { Platform } from 'react-native';
 
 export const ASISTENCIA_TRACKING_ROLLBACK_MARKER = 'ROLLBACK_ASISTENCIA_BG_TRACKING_V1';
 
-// Rollback activado: deshabilita tracking nuevo hasta nuevo aviso.
-export const ENABLE_BACKGROUND_LOCATION_TRACKING = false;
+// Modo mixto: se habilita la sesion de tracking, pero no el seguimiento continuo.
+export const ENABLE_BACKGROUND_LOCATION_TRACKING = true;
+export const ENABLE_BACKGROUND_LOCATION_UPDATES = false;
 
 export const TRACKING_TASK_NAME = 'asistencia-background-location-task';
 export const TRACKING_TIME_INTERVAL_MS = 5 * 60 * 1000;

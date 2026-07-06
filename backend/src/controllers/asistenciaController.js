@@ -4,6 +4,25 @@ import { uploadImageSafely } from '../services/sharePointService.js';
 
 const ASISTENCIA_BACKEND_DEPLOY_MARKER = 'backend-2026-07-06-v2';
 
+const getCurrentLimaDateParts = () => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const values = {};
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+
+  return values;
+};
+
 const resolveAsistenciaDateParts = (fechaAsistencia) => {
   const raw = String(fechaAsistencia || '').trim();
   const ymdMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -12,11 +31,20 @@ const resolveAsistenciaDateParts = (fechaAsistencia) => {
     return { yyyy, mm, dd };
   }
 
-  const fallback = new Date();
+  const fallback = getCurrentLimaDateParts();
+  if (fallback.year && fallback.month && fallback.day) {
+    return {
+      yyyy: fallback.year,
+      mm: fallback.month,
+      dd: fallback.day,
+    };
+  }
+
+  const fallbackDate = new Date();
   return {
-    yyyy: String(fallback.getFullYear()),
-    mm: String(fallback.getMonth() + 1).padStart(2, '0'),
-    dd: String(fallback.getDate()).padStart(2, '0'),
+    yyyy: String(fallbackDate.getFullYear()),
+    mm: String(fallbackDate.getMonth() + 1).padStart(2, '0'),
+    dd: String(fallbackDate.getDate()).padStart(2, '0'),
   };
 };
 

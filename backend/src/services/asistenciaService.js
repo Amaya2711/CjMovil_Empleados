@@ -15,6 +15,30 @@ const parseAsistenciaDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const getCurrentLimaDate = () => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const values = {};
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+
+  if (values.year && values.month && values.day) {
+    return new Date(Number(values.year), Number(values.month) - 1, Number(values.day), 12, 0, 0, 0);
+  }
+
+  const fallback = new Date();
+  return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12, 0, 0, 0);
+};
+
 // Obtiene el offset de zona horaria actual del servidor en minutos
 // Ej: UTC-5 (Perú) = 300 minutos
 const getServerTimezoneOffset = () => {
@@ -178,7 +202,7 @@ export const startAsistenciaTrackingSessionService = async ({
   accuracyIngreso,
 }) => {
   const pool = await getConnection();
-  const fechaValue = parseAsistenciaDate(fechaAsistencia) || new Date();
+  const fechaValue = parseAsistenciaDate(fechaAsistencia) || getCurrentLimaDate();
   const codEmpValue = String(codEmp || usuarioAct || '').trim();
   const usuarioActValue = Number.isFinite(Number(usuarioAct)) ? Number(usuarioAct) : null;
   const plataformaValue = String(plataforma || '').trim().slice(0, 20) || null;

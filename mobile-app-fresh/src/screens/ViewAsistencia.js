@@ -20,17 +20,36 @@ import {
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
 const ASISTENCIA_FRONTEND_DEPLOY_MARKER = 'frontend-2026-07-06-v2';
 
+const getLimaDateParts = () => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const values = {};
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+
+  return values;
+};
+
 const getLimaDate = () => {
   try {
-    const limaStr = new Date().toLocaleString('en-US', { timeZone: 'America/Lima' });
-    const d = new Date(limaStr);
-    if (!isNaN(d.getTime())) return d;
+    const { year, month, day } = getLimaDateParts();
+    if (year && month && day) {
+      return new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+    }
   } catch (e) {
     // fallthrough al fallback
   }
   const now = new Date();
-  const utc = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
-  return new Date(utc.getTime() - 5 * 60 * 60000);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
 };
 
 export default function ViewAsistencia() {

@@ -2,8 +2,8 @@ import { Platform } from 'react-native';
 
 export const ASISTENCIA_TRACKING_ROLLBACK_MARKER = 'ROLLBACK_ASISTENCIA_BG_TRACKING_V1';
 
-// Para rollback funcional rapido, cambiar a false y recompilar la app.
-export const ENABLE_BACKGROUND_LOCATION_TRACKING = true;
+// Rollback activado: deshabilita tracking nuevo hasta nuevo aviso.
+export const ENABLE_BACKGROUND_LOCATION_TRACKING = false;
 
 export const TRACKING_TASK_NAME = 'asistencia-background-location-task';
 export const TRACKING_TIME_INTERVAL_MS = 5 * 60 * 1000;

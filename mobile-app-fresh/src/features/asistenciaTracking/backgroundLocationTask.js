@@ -152,9 +152,9 @@ if (isEnabled && !TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
     const nextQueue = [...queue, ...points];
     await writeQueue(nextQueue);
 
-    if (nextQueue.length >= TRACKING_BATCH_SIZE) {
-      await flushQueuedPoints();
-    }
+    // Intentamos enviar en cada ciclo de ubicacion para reflejar el seguimiento
+    // casi en tiempo real; si falla, la cola local conserva los puntos.
+    await flushQueuedPoints();
   });
 }
 

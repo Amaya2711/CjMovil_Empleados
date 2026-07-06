@@ -197,6 +197,26 @@ export const registerAsistencia = async (req, res) => {
     
     const resultRows = Array.isArray(result) ? result : [];
     const asistenciaRegistrada = resultRows.length > 0;
+    let trackingSession = null;
+
+    if (asistenciaRegistrada && tipoNormalizado === 'INGRESO' && ENABLE_ASISTENCIA_TRACKING_V1) {
+      const currentLimaParts = getCurrentLimaDateParts();
+      const currentLimaDate = `${currentLimaParts.year}-${currentLimaParts.month}-${currentLimaParts.day}`;
+      try {
+        trackingSession = await startAsistenciaTrackingSessionService({
+          usuarioAct: usuarioActValue,
+          codEmp: codEmpArchivo,
+          fechaAsistencia: currentLimaDate,
+          plataforma: req.headers['x-platform'] || null,
+          latitudIngreso: lat,
+          longitudIngreso: lon,
+          accuracyIngreso: req.body?.accuracy ?? null,
+        });
+        console.log('[registerAsistencia][TRACKING_SESSION]', trackingSession);
+      } catch (trackingError) {
+        console.warn('[registerAsistencia][TRACKING_SESSION_WARN]', trackingError?.message || trackingError);
+      }
+    }
 
     console.log('[registerAsistencia][FINAL_RESPONSE]', {
       asistenciaRegistrada,
@@ -204,6 +224,7 @@ export const registerAsistencia = async (req, res) => {
       imagenEnviada: !!imagenBase64,
       imagenSubida: uploadResult?.success || false,
       imagenSharePointUrl: imagenSharePointUrl || null,
+      trackingSession,
     });
 
     if (!asistenciaRegistrada) {
@@ -217,7 +238,7 @@ export const registerAsistencia = async (req, res) => {
       });
     }
     
-    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, imageUpload: uploadResult, imagen: imagenSharePointUrl });
+    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, imageUpload: uploadResult, imagen: imagenSharePointUrl, trackingSession });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

@@ -18,6 +18,8 @@ import {
   ASISTENCIA_TRACKING_ROLLBACK_MARKER,
 } from '../features/asistenciaTracking/config';
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
+const ASISTENCIA_FRONTEND_DEPLOY_MARKER = 'frontend-2026-07-06-v2';
+
 const getLimaDate = () => {
   try {
     const limaStr = new Date().toLocaleString('en-US', { timeZone: 'America/Lima' });
@@ -82,6 +84,10 @@ export default function ViewAsistencia() {
     if (!value) return null;
     return /^\d+$/.test(value) ? value : null;
   }, [codEmp]);
+
+  useEffect(() => {
+    console.log('[ViewAsistencia][DEPLOY_MARKER]', ASISTENCIA_FRONTEND_DEPLOY_MARKER);
+  }, []);
 
   useEffect(() => {
     const source = Array.isArray(data) ? data : [];

@@ -2,8 +2,11 @@ import { ENABLE_ASISTENCIA_TRACKING_V1, ASISTENCIA_TRACKING_ROLLBACK_MARKER } fr
 import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService, saveAsistenciaTrackingPointsBatchService, startAsistenciaTrackingSessionService, stopAsistenciaTrackingSessionService } from '../services/asistenciaService.js';
 import { uploadImageSafely } from '../services/sharePointService.js';
 
+const ASISTENCIA_BACKEND_DEPLOY_MARKER = 'backend-2026-07-06-v2';
+
 export const getAsistencia = async (req, res) => {
   try {
+    res.setHeader('X-Asistencia-Backend-Version', ASISTENCIA_BACKEND_DEPLOY_MARKER);
     const codEmp = req.query.codEmp || req.body?.codEmp || '';
     const fechaAsistencia = req.query.fechaAsistencia || req.body?.fechaAsistencia || null;
     // El parámetro que espera el SP es IdEmpleado
@@ -18,8 +21,9 @@ export const getAsistencia = async (req, res) => {
 
 export const registerAsistencia = async (req, res) => {
   try {
+    res.setHeader('X-Asistencia-Backend-Version', ASISTENCIA_BACKEND_DEPLOY_MARKER);
     const { usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida, imagenBase64, nombreImagen } = req.body || {};
-    console.log('[registerAsistencia][BODY]', { usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida, tieneImagen: !!imagenBase64 });
+    console.log('[registerAsistencia][BODY]', { deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, usuarioAct, codEmp, tipo, lat, lon, fechaAsistencia, comentario, estadoMarcacion, estadoSalida, tieneImagen: !!imagenBase64 });
     if (String(tipo || '').toUpperCase() === 'SALIDA') {
       console.log('[SALIDA][BODY]', {
         usuarioAct,
@@ -167,6 +171,7 @@ export const registerAsistencia = async (req, res) => {
     if (!asistenciaRegistrada) {
       return res.status(409).json({
         success: false,
+        deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER,
         message: 'La marcacion no fue registrada por la base de datos. Verifique restricciones de asistencia o intente nuevamente.',
         result: resultRows,
         imageUpload: uploadResult,
@@ -174,7 +179,7 @@ export const registerAsistencia = async (req, res) => {
       });
     }
     
-    res.json({ success: true, result: resultRows, imageUpload: uploadResult, imagen: imagenSharePointUrl });
+    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, imageUpload: uploadResult, imagen: imagenSharePointUrl });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

@@ -9,6 +9,14 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { useCallback, useMemo } from 'react';
 import * as ImageManipulator from 'expo-image-manipulator';
+import {
+  startTrackingSession,
+  stopTrackingSession,
+} from '../features/asistenciaTracking/backgroundLocationTask';
+import {
+  ENABLE_BACKGROUND_LOCATION_TRACKING,
+  ASISTENCIA_TRACKING_ROLLBACK_MARKER,
+} from '../features/asistenciaTracking/config';
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
 const getLimaDate = () => {
   try {
@@ -596,6 +604,43 @@ export default function ViewAsistencia() {
               }
             }
             
+            if (ENABLE_BACKGROUND_LOCATION_TRACKING) {
+              try {
+                if (tipo === 'INGRESO') {
+                  const trackingResult = await startTrackingSession({
+                    usuarioAct,
+                    codEmp,
+                    fechaAsistencia,
+                    coords,
+                  });
+                  if (trackingResult?.started) {
+                    msg += ' | Seguimiento activo';
+                  } else if (!trackingResult?.skipped) {
+                    msg += ' | Seguimiento no activado';
+                  }
+                }
+
+                if (tipo === 'SALIDA') {
+                  const trackingResult = await stopTrackingSession({
+                    usuarioAct,
+                    codEmp,
+                    coords,
+                  });
+                  if (trackingResult?.stopped) {
+                    msg += ' | Seguimiento detenido';
+                  } else if (!trackingResult?.skipped) {
+                    msg += ' | Seguimiento no detenido';
+                  }
+                }
+              } catch (trackingError) {
+                console.warn(
+                  `[${ASISTENCIA_TRACKING_ROLLBACK_MARKER}] executeRegister tracking`,
+                  trackingError?.message
+                );
+                msg += ' | Marcacion registrada sin seguimiento';
+              }
+            }
+
             setMessage(msg);
             setActiveTab('RESUMEN');
             setSelectedResumenEstado('__ALL__');

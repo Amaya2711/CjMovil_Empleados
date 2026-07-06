@@ -1,4 +1,5 @@
-import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService } from '../services/asistenciaService.js';
+import { ENABLE_ASISTENCIA_TRACKING_V1, ASISTENCIA_TRACKING_ROLLBACK_MARKER } from '../config/featureFlags.js';
+import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService, saveAsistenciaTrackingPointsBatchService, startAsistenciaTrackingSessionService, stopAsistenciaTrackingSessionService } from '../services/asistenciaService.js';
 import { uploadImageSafely } from '../services/sharePointService.js';
 
 export const getAsistencia = async (req, res) => {
@@ -217,5 +218,54 @@ export const eliminarAsistenciaPrueba = async (req, res) => {
   } catch (error) {
     console.error('Error al ejecutar sp_Asistencia_Eliminar_Prueba:', error);
     res.status(500).json({ message: 'Error al ejecutar eliminación de prueba', error: error.message });
+  }
+};
+export const startAsistenciaTrackingSession = async (req, res) => {
+  if (!ENABLE_ASISTENCIA_TRACKING_V1) {
+    return res.status(409).json({ message: `${ASISTENCIA_TRACKING_ROLLBACK_MARKER}: tracking deshabilitado` });
+  }
+
+  try {
+    const result = await startAsistenciaTrackingSessionService(req.body || {});
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[startAsistenciaTrackingSession]', error);
+    res.status(500).json({ message: error.message || 'Error al iniciar sesion de tracking' });
+  }
+};
+
+export const saveAsistenciaTrackingPointsBatch = async (req, res) => {
+  if (!ENABLE_ASISTENCIA_TRACKING_V1) {
+    return res.status(409).json({ message: `${ASISTENCIA_TRACKING_ROLLBACK_MARKER}: tracking deshabilitado` });
+  }
+
+  try {
+    const sessionId = req.body?.sessionId;
+    const points = Array.isArray(req.body?.points) ? req.body.points : [];
+    if (!Number.isFinite(Number(sessionId))) {
+      return res.status(400).json({ message: 'sessionId es requerido' });
+    }
+    if (points.length === 0) {
+      return res.json({ success: true, insertedCount: 0 });
+    }
+    const result = await saveAsistenciaTrackingPointsBatchService({ sessionId, points });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[saveAsistenciaTrackingPointsBatch]', error);
+    res.status(500).json({ message: error.message || 'Error al guardar puntos de tracking' });
+  }
+};
+
+export const stopAsistenciaTrackingSession = async (req, res) => {
+  if (!ENABLE_ASISTENCIA_TRACKING_V1) {
+    return res.status(409).json({ message: `${ASISTENCIA_TRACKING_ROLLBACK_MARKER}: tracking deshabilitado` });
+  }
+
+  try {
+    const result = await stopAsistenciaTrackingSessionService(req.body || {});
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('[stopAsistenciaTrackingSession]', error);
+    res.status(500).json({ message: error.message || 'Error al cerrar sesion de tracking' });
   }
 };

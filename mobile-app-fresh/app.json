@@ -22,7 +22,18 @@
       "package": "com.mas2711.mobileappfresh"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "locationWhenInUsePermission": "Permitir que la app use su ubicacion para registrar asistencia.",
+          "locationAlwaysAndWhenInUsePermission": "Permitir que la app siga usando su ubicacion entre INGRESO y SALIDA.",
+          "locationAlwaysPermission": "Permitir que la app siga usando su ubicacion entre INGRESO y SALIDA."
+        }
+      ]
     ],
     "extra": {
       "eas": {

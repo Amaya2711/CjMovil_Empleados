@@ -156,3 +156,145 @@ export const eliminarAsistenciaPruebaService = async () => {
   const result = await request.execute('sp_Asistencia_Eliminar_Prueba');
   return result.recordset || result;
 };
+
+export const startAsistenciaTrackingSessionService = async ({
+  usuarioAct,
+  codEmp,
+  fechaAsistencia,
+  plataforma,
+  latitudIngreso,
+  longitudIngreso,
+  accuracyIngreso,
+}) => {
+  const pool = await getConnection();
+  const fechaValue = fechaAsistencia ? new Date(fechaAsistencia) : new Date();
+  const codEmpValue = String(codEmp || usuarioAct || '').trim();
+  const usuarioActValue = Number.isFinite(Number(usuarioAct)) ? Number(usuarioAct) : null;
+  const plataformaValue = String(plataforma || '').trim().slice(0, 20) || null;
+  const latitudValue = Number.isFinite(Number(latitudIngreso)) ? Number(latitudIngreso) : null;
+  const longitudValue = Number.isFinite(Number(longitudIngreso)) ? Number(longitudIngreso) : null;
+  const accuracyValue = Number.isFinite(Number(accuracyIngreso)) ? Number(accuracyIngreso) : null;
+
+  const existingRequest = pool.request();
+  existingRequest.input('CodEmp', sql.VarChar(50), codEmpValue);
+  existingRequest.input('FechaAsistencia', sql.Date, fechaValue);
+  const existing = await existingRequest.query(`
+    SELECT TOP (1) SesionId
+    FROM dbo.AsistenciaTrackingSesion
+    WHERE CodEmp = @CodEmp
+      AND FechaAsistencia = @FechaAsistencia
+      AND Estado = 'ACTIVO'
+    ORDER BY SesionId DESC
+  `);
+
+  const existingSessionId = existing.recordset?.[0]?.SesionId ?? null;
+  if (existingSessionId) {
+    return { sessionId: existingSessionId, reused: true };
+  }
+
+  const insertRequest = pool.request();
+  insertRequest.input('CodEmp', sql.VarChar(50), codEmpValue);
+  insertRequest.input('UsuarioAct', sql.Int, usuarioActValue);
+  insertRequest.input('FechaAsistencia', sql.Date, fechaValue);
+  insertRequest.input('Plataforma', sql.VarChar(20), plataformaValue);
+  insertRequest.input('LatitudIngreso', sql.Decimal(18, 6), latitudValue);
+  insertRequest.input('LongitudIngreso', sql.Decimal(18, 6), longitudValue);
+  insertRequest.input('AccuracyIngreso', sql.Decimal(18, 6), accuracyValue);
+  const inserted = await insertRequest.query(`
+    INSERT INTO dbo.AsistenciaTrackingSesion
+      (CodEmp, UsuarioAct, FechaAsistencia, Plataforma, LatitudIngreso, LongitudIngreso, AccuracyIngreso, Estado, FechaHoraIngreso)
+    OUTPUT INSERTED.SesionId
+    VALUES
+      (@CodEmp, @UsuarioAct, @FechaAsistencia, @Plataforma, @LatitudIngreso, @LongitudIngreso, @AccuracyIngreso, 'ACTIVO', SYSDATETIME())
+  `);
+
+  return {
+    sessionId: inserted.recordset?.[0]?.SesionId ?? null,
+    reused: false,
+  };
+};
+
+export const saveAsistenciaTrackingPointsBatchService = async ({
+  sessionId,
+  points,
+}) => {
+  const pool = await getConnection();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    let insertedCount = 0;
+    for (const point of points) {
+      const request = new sql.Request(transaction);
+      request.input('SesionId', sql.BigInt, Number(sessionId));
+      request.input('FechaHora', sql.DateTime2, point?.fechaHora ? new Date(point.fechaHora) : new Date());
+      request.input('Latitud', sql.Decimal(18, 6), Number(point?.latitud));
+      request.input('Longitud', sql.Decimal(18, 6), Number(point?.longitud));
+      request.input('Accuracy', sql.Decimal(18, 6), Number.isFinite(Number(point?.accuracy)) ? Number(point.accuracy) : null);
+      request.input('Speed', sql.Decimal(18, 6), Number.isFinite(Number(point?.speed)) ? Number(point.speed) : null);
+      request.input('Heading', sql.Decimal(18, 6), Number.isFinite(Number(point?.heading)) ? Number(point.heading) : null);
+      request.input('Source', sql.VarChar(50), String(point?.source || 'background-task').slice(0, 50));
+      await request.query(`
+        INSERT INTO dbo.AsistenciaTrackingPunto
+          (SesionId, FechaHora, Latitud, Longitud, Accuracy, Speed, Heading, Source)
+        VALUES
+          (@SesionId, @FechaHora, @Latitud, @Longitud, @Accuracy, @Speed, @Heading, @Source)
+      `);
+      insertedCount += 1;
+    }
+
+    await transaction.commit();
+    return { insertedCount };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+};
+
+export const stopAsistenciaTrackingSessionService = async ({
+  sessionId,
+  usuarioAct,
+  codEmp,
+  latitudSalida,
+  longitudSalida,
+  accuracySalida,
+}) => {
+  const pool = await getConnection();
+  let sessionIdValue = Number.isFinite(Number(sessionId)) ? Number(sessionId) : null;
+
+  if (!sessionIdValue) {
+    const request = pool.request();
+    request.input('CodEmp', sql.VarChar(50), String(codEmp || usuarioAct || '').trim());
+    const result = await request.query(`
+      SELECT TOP (1) SesionId
+      FROM dbo.AsistenciaTrackingSesion
+      WHERE CodEmp = @CodEmp
+        AND Estado = 'ACTIVO'
+      ORDER BY SesionId DESC
+    `);
+    sessionIdValue = result.recordset?.[0]?.SesionId ?? null;
+  }
+
+  if (!sessionIdValue) {
+    return { updated: false, sessionId: null };
+  }
+
+  const request = pool.request();
+  request.input('SesionId', sql.BigInt, sessionIdValue);
+  request.input('LatitudSalida', sql.Decimal(18, 6), Number.isFinite(Number(latitudSalida)) ? Number(latitudSalida) : null);
+  request.input('LongitudSalida', sql.Decimal(18, 6), Number.isFinite(Number(longitudSalida)) ? Number(longitudSalida) : null);
+  request.input('AccuracySalida', sql.Decimal(18, 6), Number.isFinite(Number(accuracySalida)) ? Number(accuracySalida) : null);
+  await request.query(`
+    UPDATE dbo.AsistenciaTrackingSesion
+    SET
+      FechaHoraSalida = SYSDATETIME(),
+      LatitudSalida = @LatitudSalida,
+      LongitudSalida = @LongitudSalida,
+      AccuracySalida = @AccuracySalida,
+      Estado = 'FINALIZADO',
+      UpdatedAt = SYSDATETIME()
+    WHERE SesionId = @SesionId
+  `);
+
+  return { updated: true, sessionId: sessionIdValue };
+};

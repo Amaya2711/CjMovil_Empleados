@@ -3,6 +3,7 @@ import * as Font from 'expo-font';
 import { AppState, Platform, View, Text } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import 'react-native-gesture-handler';
+import './src/features/asistenciaTracking/backgroundLocationTask';
 // Eliminado hack de modificación de fuente para compatibilidad con React Native moderno
 import { CommonActions, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { Provider as PaperProvider, DefaultTheme, Button } from 'react-native-paper';

@@ -1,5 +1,5 @@
 import express from 'express';
-import { cargarListadoDiario, eliminarAsistenciaPrueba, getAsistencia, getConstanteOficinas, registerAsistencia } from '../controllers/asistenciaController.js';
+import { cargarListadoDiario, eliminarAsistenciaPrueba, getAsistencia, getConstanteOficinas, registerAsistencia, saveAsistenciaTrackingPointsBatch, startAsistenciaTrackingSession, stopAsistenciaTrackingSession } from '../controllers/asistenciaController.js';
 
 const router = express.Router();
 
@@ -13,5 +13,11 @@ router.post('/asistencia/listado-diario', cargarListadoDiario);
 router.get('/asistencia/constante-oficinas', getConstanteOficinas);
 // POST /api/asistencia/eliminar-prueba
 router.post('/asistencia/eliminar-prueba', eliminarAsistenciaPrueba);
+// POST /api/asistencia/tracking/session/start
+router.post('/asistencia/tracking/session/start', startAsistenciaTrackingSession);
+// POST /api/asistencia/tracking/points/batch
+router.post('/asistencia/tracking/points/batch', saveAsistenciaTrackingPointsBatch);
+// POST /api/asistencia/tracking/session/stop
+router.post('/asistencia/tracking/session/stop', stopAsistenciaTrackingSession);
 
 export default router;

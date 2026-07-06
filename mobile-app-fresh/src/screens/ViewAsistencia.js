@@ -39,17 +39,46 @@ const getLimaDateParts = () => {
   return values;
 };
 
+const getLimaTimeParts = () => {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Lima',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const values = {};
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+
+  return values;
+};
+
 const getLimaDate = () => {
   try {
     const { year, month, day } = getLimaDateParts();
-    if (year && month && day) {
-      return new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+    const { hour, minute, second } = getLimaTimeParts();
+    if (year && month && day && hour && minute && second) {
+      return new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hour),
+        Number(minute),
+        Number(second),
+        0
+      );
     }
   } catch (e) {
     // fallthrough al fallback
   }
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  return now;
 };
 
 export default function ViewAsistencia() {

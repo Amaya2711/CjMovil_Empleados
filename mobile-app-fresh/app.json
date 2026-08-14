@@ -19,7 +19,15 @@
       "bundler": "metro"
     },
     "android": {
-      "package": "com.mas2711.mobileappfresh"
+      "package": "com.mas2711.mobileappfresh",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "plugins": [
       "expo-font",

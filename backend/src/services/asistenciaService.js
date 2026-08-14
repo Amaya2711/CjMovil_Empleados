@@ -255,11 +255,26 @@ export const saveAsistenciaTrackingPointsBatchService = async ({
 }) => {
   const pool = await getConnection();
   const transaction = new sql.Transaction(pool);
+  console.log('[saveAsistenciaTrackingPointsBatchService][BEGIN]', {
+    sessionId,
+    pointsCount: Array.isArray(points) ? points.length : 0,
+  });
   await transaction.begin();
 
   try {
     let insertedCount = 0;
-    for (const point of points) {
+    for (const [index, point] of points.entries()) {
+      console.log('[saveAsistenciaTrackingPointsBatchService][INSERT_POINT]', {
+        sessionId,
+        index: index + 1,
+        total: points.length,
+        fechaHora: point?.fechaHora ?? null,
+        latitud: point?.latitud ?? null,
+        longitud: point?.longitud ?? null,
+        accuracy: point?.accuracy ?? null,
+        source: point?.source ?? null,
+      });
+
       const request = new sql.Request(transaction);
       request.input('SesionId', sql.BigInt, Number(sessionId));
       request.input('FechaHora', sql.DateTime2, point?.fechaHora ? new Date(point.fechaHora) : new Date());
@@ -276,11 +291,25 @@ export const saveAsistenciaTrackingPointsBatchService = async ({
           (@SesionId, @FechaHora, @Latitud, @Longitud, @Accuracy, @Speed, @Heading, @Source)
       `);
       insertedCount += 1;
+      console.log('[saveAsistenciaTrackingPointsBatchService][POINT_INSERTED]', {
+        sessionId,
+        index: index + 1,
+        insertedCount,
+      });
     }
 
     await transaction.commit();
+    console.log('[saveAsistenciaTrackingPointsBatchService][COMMIT]', {
+      sessionId,
+      insertedCount,
+    });
     return { insertedCount };
   } catch (error) {
+    console.error('[saveAsistenciaTrackingPointsBatchService][ROLLBACK]', {
+      sessionId,
+      pointsCount: Array.isArray(points) ? points.length : 0,
+      error: error?.message || String(error),
+    });
     await transaction.rollback();
     throw error;
   }

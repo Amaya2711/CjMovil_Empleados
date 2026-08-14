@@ -12,6 +12,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import {
   startTrackingSession,
   stopTrackingSession,
+  syncQueuedTrackingPoints,
 } from '../features/asistenciaTracking/backgroundLocationTask';
 import {
   ENABLE_BACKGROUND_LOCATION_TRACKING,
@@ -310,13 +311,34 @@ export default function ViewAsistencia() {
         useFocusEffect(
           useCallback(() => {
             mounted.current = true;
+            let cancelled = false;
+
+            const syncTrackingQueue = async () => {
+              if (!ENABLE_BACKGROUND_LOCATION_TRACKING || cancelled) {
+                return;
+              }
+              try {
+                const result = await syncQueuedTrackingPoints();
+                console.log('[ViewAsistencia][TRACKING_SYNC]', result);
+              } catch (error) {
+                console.warn('[ViewAsistencia][TRACKING_SYNC_WARN]', error?.message || error);
+              }
+            };
+
             checkLocationEnabled();
             refreshCurrentCoordinates();
             fetchData();
+            syncTrackingQueue();
+            const syncTimer = setInterval(() => {
+              syncTrackingQueue();
+            }, 60000);
+
             return () => {
+              cancelled = true;
+              clearInterval(syncTimer);
               mounted.current = false;
             };
-          }, [cuadrilla, codEmp, idusuario])
+          }, [cuadrilla, codEmp, fetchData, idusuario, refreshCurrentCoordinates])
         );
 
         const checkLocationEnabled = async () => {

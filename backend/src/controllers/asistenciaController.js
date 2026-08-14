@@ -320,13 +320,49 @@ export const saveAsistenciaTrackingPointsBatch = async (req, res) => {
   try {
     const sessionId = req.body?.sessionId;
     const points = Array.isArray(req.body?.points) ? req.body.points : [];
+    console.log('[saveAsistenciaTrackingPointsBatch][BODY]', {
+      sessionId,
+      pointsCount: points.length,
+      codEmp: req.body?.codEmp ?? null,
+      usuarioAct: req.body?.usuarioAct ?? null,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] || null,
+    });
+
+    if (points.length > 0) {
+      const firstPoint = points[0] || {};
+      const lastPoint = points[points.length - 1] || {};
+      console.log('[saveAsistenciaTrackingPointsBatch][POINTS_SAMPLE]', {
+        first: {
+          fechaHora: firstPoint?.fechaHora ?? null,
+          latitud: firstPoint?.latitud ?? null,
+          longitud: firstPoint?.longitud ?? null,
+          accuracy: firstPoint?.accuracy ?? null,
+          source: firstPoint?.source ?? null,
+        },
+        last: {
+          fechaHora: lastPoint?.fechaHora ?? null,
+          latitud: lastPoint?.latitud ?? null,
+          longitud: lastPoint?.longitud ?? null,
+          accuracy: lastPoint?.accuracy ?? null,
+          source: lastPoint?.source ?? null,
+        },
+      });
+    }
+
     if (!Number.isFinite(Number(sessionId))) {
+      console.warn('[saveAsistenciaTrackingPointsBatch][VALIDATION] sessionId inválido o ausente');
       return res.status(400).json({ message: 'sessionId es requerido' });
     }
     if (points.length === 0) {
+      console.warn('[saveAsistenciaTrackingPointsBatch][VALIDATION] lote vacío recibido');
       return res.json({ success: true, insertedCount: 0 });
     }
     const result = await saveAsistenciaTrackingPointsBatchService({ sessionId, points });
+    console.log('[saveAsistenciaTrackingPointsBatch][RESULT]', {
+      sessionId,
+      insertedCount: result?.insertedCount ?? 0,
+    });
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('[saveAsistenciaTrackingPointsBatch]', error);

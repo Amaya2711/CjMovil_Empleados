@@ -74,13 +74,65 @@ const writeSession = async (session) => writeJsonFile(SESSION_FILE, session);
 const readQueue = async () => readJsonFile(QUEUE_FILE, []);
 const writeQueue = async (queue) => writeJsonFile(QUEUE_FILE, queue);
 
+const toFiniteNumber = (value) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+  if (![lat1, lon1, lat2, lon2].every((value) => Number.isFinite(Number(value)))) {
+    return null;
+  }
+
+  const earthRadius = 6371000;
+  const toRadians = (value) => (Number(value) * Math.PI) / 180;
+  const dLat = toRadians(Number(lat2) - Number(lat1));
+  const dLon = toRadians(Number(lon2) - Number(lon1));
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(Number(lat1))) *
+      Math.cos(toRadians(Number(lat2))) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return 2 * earthRadius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
+const getPointSummary = (point) => ({
+  fechaHora: point?.fechaHora ?? null,
+  latitud: point?.latitud ?? null,
+  longitud: point?.longitud ?? null,
+  accuracy: point?.accuracy ?? null,
+  source: point?.source ?? null,
+});
+
+const isPointNearLastPoint = (currentPoint, lastPoint) => {
+  if (!currentPoint || !lastPoint) return false;
+  const distance = calculateDistanceMeters(
+    currentPoint.latitud,
+    currentPoint.longitud,
+    lastPoint.latitud,
+    lastPoint.longitud
+  );
+  return Number.isFinite(distance) && distance <= 5;
+};
+
 const normalizePoint = (location, session) => {
   const coords = location?.coords || {};
   const accuracy = Number(coords.accuracy);
   if (!Number.isFinite(Number(coords.latitude)) || !Number.isFinite(Number(coords.longitude))) {
+    console.warn('[tracking][normalizePoint] Coordenadas inválidas:', {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+    });
     return null;
   }
   if (Number.isFinite(accuracy) && accuracy > TRACKING_MAX_ACCURACY_METERS) {
+    console.warn('[tracking][normalizePoint] Punto descartado por precisión:', {
+      accuracy,
+      maxAllowed: TRACKING_MAX_ACCURACY_METERS,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+    });
     return null;
   }
   return {
@@ -115,6 +167,12 @@ const flushQueuedPoints = async () => {
       usuarioAct: session.usuarioAct,
       points: queue,
     });
+    const lastPoint = queue[queue.length - 1] || null;
+    await writeSession({
+      ...session,
+      lastPoint: lastPoint ? getPointSummary(lastPoint) : session.lastPoint || null,
+      lastSyncAt: new Date().toISOString(),
+    });
     await writeQueue([]);
     return { sent: queue.length };
   } catch (error) {
@@ -124,6 +182,10 @@ const flushQueuedPoints = async () => {
 };
 
 if (isEnabled && !TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
+  console.log('[tracking][task][define]', {
+    taskName: TRACKING_TASK_NAME,
+    platform: Platform.OS,
+  });
   TaskManager.defineTask(TRACKING_TASK_NAME, async ({ data, error }) => {
     if (error) {
       console.error('[tracking][task][error]', error.message);
@@ -132,25 +194,66 @@ if (isEnabled && !TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
 
     const session = await readSession();
     if (!session?.sessionId) {
+      console.warn('[tracking][task][skip] No existe session activa');
       return;
     }
 
     const locations = Array.isArray(data?.locations) ? data.locations : [];
     if (locations.length === 0) {
+      console.warn('[tracking][task][skip] No llegaron ubicaciones');
       return;
     }
 
+    console.log('[tracking][task][received]', {
+      sessionId: session.sessionId,
+      locationsCount: locations.length,
+      platform: Platform.OS,
+    });
+
     const queue = await readQueue();
+    const lastQueuedPoint = queue.length > 0 ? queue[queue.length - 1] : session?.lastPoint || null;
     const points = locations
       .map((location) => normalizePoint(location, session))
       .filter(Boolean);
 
     if (points.length === 0) {
+      console.warn('[tracking][task][skip] No quedaron puntos válidos luego de normalizar');
       return;
     }
 
-    const nextQueue = [...queue, ...points];
+    const filteredPoints = [];
+    let referencePoint = lastQueuedPoint;
+
+    for (const point of points) {
+      if (isPointNearLastPoint(point, referencePoint)) {
+        console.log('[tracking][task][dedupe] Punto omitido por ser muy parecido al anterior', {
+          current: getPointSummary(point),
+          previous: getPointSummary(referencePoint),
+        });
+        continue;
+      }
+
+      filteredPoints.push(point);
+      referencePoint = point;
+    }
+
+    if (filteredPoints.length === 0) {
+      console.warn('[tracking][task][skip] Todos los puntos recibidos eran duplicados o demasiado cercanos al último');
+      return;
+    }
+
+    const nextQueue = [...queue, ...filteredPoints];
+    console.log('[tracking][task][queue]', {
+      previousQueueCount: queue.length,
+      newPointsCount: filteredPoints.length,
+      nextQueueCount: nextQueue.length,
+    });
     await writeQueue(nextQueue);
+    await writeSession({
+      ...session,
+      lastPoint: getPointSummary(filteredPoints[filteredPoints.length - 1]),
+      lastSyncAt: new Date().toISOString(),
+    });
 
     // Intentamos enviar en cada ciclo de ubicacion para reflejar el seguimiento
     // casi en tiempo real; si falla, la cola local conserva los puntos.
@@ -172,13 +275,23 @@ export const startTrackingSession = async ({
     return { started: false, skipped: true, reason: 'tracking_disabled' };
   }
 
+  console.log('[tracking][start]', {
+    usuarioAct,
+    codEmp,
+    fechaAsistencia,
+    platform: Platform.OS,
+    hasCoords: !!coords,
+  });
+
   if (ENABLE_BACKGROUND_LOCATION_UPDATES) {
     const foregroundPermission = await Location.requestForegroundPermissionsAsync();
+    console.log('[tracking][permissions][foreground]', foregroundPermission);
     if (foregroundPermission.status !== 'granted') {
       return { started: false, reason: 'foreground_permission_denied' };
     }
 
     const backgroundPermission = await Location.requestBackgroundPermissionsAsync();
+    console.log('[tracking][permissions][background]', backgroundPermission);
     if (backgroundPermission.status !== 'granted') {
       return { started: false, reason: 'background_permission_denied' };
     }
@@ -201,6 +314,10 @@ export const startTrackingSession = async ({
     accuracyIngreso: coords?.accuracy,
   });
 
+  if (!sessionResponse?.sessionId) {
+    throw new Error('No se pudo crear la sesion de tracking');
+  }
+
   const session = {
     sessionId: sessionResponse?.sessionId,
     codEmp,
@@ -208,6 +325,13 @@ export const startTrackingSession = async ({
     fechaAsistencia,
     plataforma: Platform.OS,
     startedAt: new Date().toISOString(),
+    lastPoint: coords ? getPointSummary({
+      fechaHora: new Date().toISOString(),
+      latitud: coords?.latitude,
+      longitud: coords?.longitude,
+      accuracy: coords?.accuracy,
+      source: 'ingreso',
+    }) : null,
   };
 
   await writeSession(session);
@@ -221,8 +345,9 @@ export const startTrackingSession = async ({
     };
   }
 
+  const trackingAccuracy = Location.Accuracy.Highest ?? Location.Accuracy.High;
   const options = {
-    accuracy: Location.Accuracy.Balanced,
+    accuracy: trackingAccuracy,
     distanceInterval: TRACKING_DISTANCE_INTERVAL_METERS,
     deferredUpdatesDistance: TRACKING_DEFERRED_DISTANCE_METERS,
     deferredUpdatesInterval: TRACKING_DEFERRED_INTERVAL_MS,
@@ -239,7 +364,15 @@ export const startTrackingSession = async ({
     };
   }
 
+  console.log('[tracking][startLocationUpdatesAsync]', {
+    taskName: TRACKING_TASK_NAME,
+    options,
+  });
   await Location.startLocationUpdatesAsync(TRACKING_TASK_NAME, options);
+  console.log('[tracking][started]', {
+    sessionId: session.sessionId,
+    backgroundUpdates: ENABLE_BACKGROUND_LOCATION_UPDATES,
+  });
   return { started: true, sessionId: session.sessionId };
 };
 

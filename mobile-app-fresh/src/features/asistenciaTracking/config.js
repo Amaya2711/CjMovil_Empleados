@@ -8,11 +8,11 @@ export const ENABLE_BACKGROUND_LOCATION_UPDATES = true;
 
 export const TRACKING_TASK_NAME = 'asistencia-background-location-task';
 export const TRACKING_TIME_INTERVAL_MS = 5 * 60 * 1000;
-export const TRACKING_DISTANCE_INTERVAL_METERS = 50;
-export const TRACKING_DEFERRED_INTERVAL_MS = 2 * 60 * 1000;
-export const TRACKING_DEFERRED_DISTANCE_METERS = 25;
+export const TRACKING_DISTANCE_INTERVAL_METERS = 15;
+export const TRACKING_DEFERRED_INTERVAL_MS = 60 * 1000;
+export const TRACKING_DEFERRED_DISTANCE_METERS = 15;
 export const TRACKING_BATCH_SIZE = 10;
-export const TRACKING_MAX_ACCURACY_METERS = 100;
+export const TRACKING_MAX_ACCURACY_METERS = 250;
 
 export const TRACKING_NOTIFICATION = {
   title: 'Seguimiento de asistencia activo',

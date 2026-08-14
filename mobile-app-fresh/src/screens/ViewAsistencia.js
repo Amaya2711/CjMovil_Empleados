@@ -1242,6 +1242,20 @@ export default function ViewAsistencia() {
           }
           setConfirmSalidaLoading(true);
           try {
+            try {
+              const trackingStopResult = await stopTrackingSession({
+                usuarioAct: resolveNumericEmployeeId(),
+                codEmp: resolveNumericEmployeeId(),
+                coords: pendingSalidaCoords,
+              });
+              console.log('[confirmSalidaRegister][TRACKING_STOP_EARLY]', trackingStopResult);
+            } catch (trackingError) {
+              console.warn(
+                `[${ASISTENCIA_TRACKING_ROLLBACK_MARKER}] confirmSalidaRegister tracking`,
+                trackingError?.message || trackingError
+              );
+            }
+
             let imagenBase64 = null;
             let nombreImagen = null;
             if (salidaFoto && (salidaFoto.uri || salidaFoto.localUri)) {

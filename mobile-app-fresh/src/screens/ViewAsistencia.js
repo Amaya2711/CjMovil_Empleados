@@ -538,7 +538,7 @@ export default function ViewAsistencia() {
               clearInterval(syncTimer);
               mounted.current = false;
             };
-          }, [cuadrilla, codEmp, fetchData, idusuario, refreshCurrentCoordinates])
+          }, [cuadrilla, codEmp, idusuario])
         );
 
         const handleRegister = async (tipo) => {

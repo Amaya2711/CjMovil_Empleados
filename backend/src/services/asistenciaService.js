@@ -39,6 +39,44 @@ const getCurrentLimaDate = () => {
   return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12, 0, 0, 0);
 };
 
+const formatTrackingDateTimeLima = (value) => {
+  if (!value && value !== 0) return null;
+
+  const raw = value instanceof Date ? value : new Date(value);
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+
+    const parts = formatter.formatToParts(raw);
+    const values = {};
+    parts.forEach((part) => {
+      if (part.type !== 'literal') {
+        values[part.type] = part.value;
+      }
+    });
+
+    if (values.year && values.month && values.day && values.hour && values.minute && values.second) {
+      return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`;
+    }
+  }
+
+  const text = String(value).trim();
+  const localMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/);
+  if (localMatch) {
+    return `${localMatch[1]}-${localMatch[2]}-${localMatch[3]} ${localMatch[4]}:${localMatch[5]}:${localMatch[6]}`;
+  }
+
+  return null;
+};
+
 // Obtiene el offset de zona horaria actual del servidor en minutos
 // Ej: UTC-5 (Perú) = 300 minutos
 const getServerTimezoneOffset = () => {
@@ -264,11 +302,14 @@ export const saveAsistenciaTrackingPointsBatchService = async ({
   try {
     let insertedCount = 0;
     for (const [index, point] of points.entries()) {
+      const fechaHoraValue = formatTrackingDateTimeLima(point?.fechaHora) || formatTrackingDateTimeLima(new Date());
+
       console.log('[saveAsistenciaTrackingPointsBatchService][INSERT_POINT]', {
         sessionId,
         index: index + 1,
         total: points.length,
         fechaHora: point?.fechaHora ?? null,
+        fechaHoraLima: fechaHoraValue,
         latitud: point?.latitud ?? null,
         longitud: point?.longitud ?? null,
         accuracy: point?.accuracy ?? null,
@@ -277,7 +318,7 @@ export const saveAsistenciaTrackingPointsBatchService = async ({
 
       const request = new sql.Request(transaction);
       request.input('SesionId', sql.BigInt, Number(sessionId));
-      request.input('FechaHora', sql.DateTime2, point?.fechaHora ? new Date(point.fechaHora) : new Date());
+      request.input('FechaHora', sql.VarChar(19), fechaHoraValue);
       request.input('Latitud', sql.Decimal(18, 6), Number(point?.latitud));
       request.input('Longitud', sql.Decimal(18, 6), Number(point?.longitud));
       request.input('Accuracy', sql.Decimal(18, 6), Number.isFinite(Number(point?.accuracy)) ? Number(point.accuracy) : null);
@@ -288,7 +329,7 @@ export const saveAsistenciaTrackingPointsBatchService = async ({
         INSERT INTO dbo.AsistenciaTrackingPunto
           (SesionId, FechaHora, Latitud, Longitud, Accuracy, Speed, Heading, Source)
         VALUES
-          (@SesionId, @FechaHora, @Latitud, @Longitud, @Accuracy, @Speed, @Heading, @Source)
+          (@SesionId, CONVERT(datetime2, @FechaHora, 120), @Latitud, @Longitud, @Accuracy, @Speed, @Heading, @Source)
       `);
       insertedCount += 1;
       console.log('[saveAsistenciaTrackingPointsBatchService][POINT_INSERTED]', {

@@ -107,6 +107,38 @@ const getPointSummary = (point) => ({
   source: point?.source ?? null,
 });
 
+const formatLimaDateTime = (timestamp = Date.now()) => {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = {};
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+
+  if (!values.year || !values.month || !values.day || !values.hour || !values.minute || !values.second) {
+    return null;
+  }
+
+  return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`;
+};
+
 const isPointNearLastPoint = (currentPoint, lastPoint) => {
   if (!currentPoint || !lastPoint) return false;
   const distance = calculateDistanceMeters(
@@ -141,7 +173,7 @@ const normalizePoint = (location, session) => {
     sessionId: session?.sessionId || null,
     codEmp: session?.codEmp || null,
     usuarioAct: session?.usuarioAct || null,
-    fechaHora: location?.timestamp ? new Date(location.timestamp).toISOString() : new Date().toISOString(),
+    fechaHora: formatLimaDateTime(location?.timestamp) || formatLimaDateTime(),
     latitud: Number(coords.latitude),
     longitud: Number(coords.longitude),
     accuracy: Number.isFinite(accuracy) ? accuracy : null,
@@ -328,7 +360,7 @@ export const startTrackingSession = async ({
     plataforma: Platform.OS,
     startedAt: new Date().toISOString(),
     lastPoint: coords ? getPointSummary({
-      fechaHora: new Date().toISOString(),
+      fechaHora: formatLimaDateTime(),
       latitud: coords?.latitude,
       longitud: coords?.longitude,
       accuracy: coords?.accuracy,
@@ -346,7 +378,7 @@ export const startTrackingSession = async ({
       ...session,
       startedAt: new Date().toISOString(),
       lastPoint: coords ? getPointSummary({
-        fechaHora: new Date().toISOString(),
+        fechaHora: formatLimaDateTime(),
         latitud: coords?.latitude,
         longitud: coords?.longitude,
         accuracy: coords?.accuracy,

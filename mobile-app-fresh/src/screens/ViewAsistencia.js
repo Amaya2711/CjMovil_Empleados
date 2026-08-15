@@ -13,6 +13,7 @@ import {
   startTrackingSession,
   stopTrackingSession,
   syncQueuedTrackingPoints,
+  sendWebTrackingPoint,
 } from '../features/asistenciaTracking/backgroundLocationTask';
 import {
   ENABLE_BACKGROUND_LOCATION_TRACKING,
@@ -126,6 +127,8 @@ export default function ViewAsistencia() {
   const [confirmSalidaLoading, setConfirmSalidaLoading] = useState(false);
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
+  const webTrackingTimerRef = useRef(null);
+  const salidaTrackingStoppedRef = useRef(false);
 
   const resolveNumericEmployeeId = useCallback(() => {
     if (codEmp === null || typeof codEmp === 'undefined') return null;
@@ -133,6 +136,32 @@ export default function ViewAsistencia() {
     if (!value) return null;
     return /^\d+$/.test(value) ? value : null;
   }, [codEmp]);
+
+  const clearWebTrackingTimer = useCallback(() => {
+    if (webTrackingTimerRef.current) {
+      clearInterval(webTrackingTimerRef.current);
+      webTrackingTimerRef.current = null;
+    }
+  }, []);
+
+  const startWebTrackingTimer = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+    clearWebTrackingTimer();
+    webTrackingTimerRef.current = setInterval(async () => {
+      if (registerActionRunning || !mounted.current) {
+        return;
+      }
+      try {
+        const coords = await getCurrentPosition();
+        const result = await sendWebTrackingPoint(coords);
+        console.log('[ViewAsistencia][WEB_TRACKING_POINT]', result);
+      } catch (error) {
+        console.warn('[ViewAsistencia][WEB_TRACKING_POINT_WARN]', error?.message || error);
+      }
+    }, 60000);
+  }, [clearWebTrackingTimer, registerActionRunning]);
 
   useEffect(() => {
     console.log('[ViewAsistencia][DEPLOY_MARKER]', ASISTENCIA_FRONTEND_DEPLOY_MARKER);
@@ -536,6 +565,7 @@ export default function ViewAsistencia() {
             return () => {
               cancelled = true;
               clearInterval(syncTimer);
+              clearWebTrackingTimer();
               mounted.current = false;
             };
           }, [cuadrilla, codEmp, idusuario])
@@ -691,21 +721,29 @@ export default function ViewAsistencia() {
                   });
                   if (trackingResult?.started) {
                     msg += ' | Seguimiento activo';
+                    if (trackingResult?.webFallback) {
+                      startWebTrackingTimer();
+                    }
                   } else if (!trackingResult?.skipped) {
                     msg += ' | Seguimiento no activado';
                   }
                 }
 
                 if (tipo === 'SALIDA') {
-                  const trackingResult = await stopTrackingSession({
-                    usuarioAct,
-                    codEmp,
-                    coords,
-                  });
-                  if (trackingResult?.stopped) {
+                  if (!salidaTrackingStoppedRef.current) {
+                    const trackingResult = await stopTrackingSession({
+                      usuarioAct,
+                      codEmp,
+                      coords,
+                    });
+                    salidaTrackingStoppedRef.current = true;
+                    if (trackingResult?.stopped) {
+                      msg += ' | Seguimiento detenido';
+                    } else if (!trackingResult?.skipped) {
+                      msg += ' | Seguimiento no detenido';
+                    }
+                  } else {
                     msg += ' | Seguimiento detenido';
-                  } else if (!trackingResult?.skipped) {
-                    msg += ' | Seguimiento no detenido';
                   }
                 }
               } catch (trackingError) {
@@ -747,6 +785,8 @@ export default function ViewAsistencia() {
           setSalidaFoto(null);
           setPendingSalidaCoords(null);
           setPendingSalidaWarning('');
+          salidaTrackingStoppedRef.current = false;
+          clearWebTrackingTimer();
         };
 
         const deleteIfExists = async (uri) => {
@@ -1242,6 +1282,7 @@ export default function ViewAsistencia() {
           }
           setConfirmSalidaLoading(true);
           try {
+            clearWebTrackingTimer();
             try {
               const trackingStopResult = await stopTrackingSession({
                 usuarioAct: resolveNumericEmployeeId(),
@@ -1249,6 +1290,7 @@ export default function ViewAsistencia() {
                 coords: pendingSalidaCoords,
               });
               console.log('[confirmSalidaRegister][TRACKING_STOP_EARLY]', trackingStopResult);
+              salidaTrackingStoppedRef.current = true;
             } catch (trackingError) {
               console.warn(
                 `[${ASISTENCIA_TRACKING_ROLLBACK_MARKER}] confirmSalidaRegister tracking`,
@@ -1327,6 +1369,7 @@ export default function ViewAsistencia() {
             setSalidaFoto(null);
             setPendingSalidaCoords(null);
             setPendingSalidaWarning('');
+            salidaTrackingStoppedRef.current = false;
           } finally {
             setConfirmSalidaLoading(false);
           }

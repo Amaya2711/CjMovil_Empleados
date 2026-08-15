@@ -27,7 +27,9 @@ const TRACKING_DIRECTORY = FileSystem.documentDirectory
 const SESSION_FILE = TRACKING_DIRECTORY ? `${TRACKING_DIRECTORY}session.json` : null;
 const QUEUE_FILE = TRACKING_DIRECTORY ? `${TRACKING_DIRECTORY}queue.json` : null;
 
-const isEnabled = ENABLE_BACKGROUND_LOCATION_TRACKING && isBackgroundTrackingSupportedPlatform;
+const isNativeBackgroundTrackingSupported = ENABLE_BACKGROUND_LOCATION_TRACKING && isBackgroundTrackingSupportedPlatform;
+const isTrackingSessionSupported = ENABLE_BACKGROUND_LOCATION_TRACKING;
+let webTrackingSession = null;
 
 const ensureTrackingDirectory = async () => {
   if (!TRACKING_DIRECTORY) return false;
@@ -150,7 +152,7 @@ const normalizePoint = (location, session) => {
 };
 
 const flushQueuedPoints = async () => {
-  if (!isEnabled) {
+  if (!isNativeBackgroundTrackingSupported) {
     return { sent: 0, skipped: true };
   }
 
@@ -181,7 +183,7 @@ const flushQueuedPoints = async () => {
   }
 };
 
-if (isEnabled && !TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
+if (isNativeBackgroundTrackingSupported && !TaskManager.isTaskDefined(TRACKING_TASK_NAME)) {
   console.log('[tracking][task][define]', {
     taskName: TRACKING_TASK_NAME,
     platform: Platform.OS,
@@ -271,7 +273,7 @@ export const startTrackingSession = async ({
   fechaAsistencia,
   coords,
 }) => {
-  if (!isEnabled) {
+  if (!isTrackingSessionSupported) {
     return { started: false, skipped: true, reason: 'tracking_disabled' };
   }
 
@@ -283,7 +285,7 @@ export const startTrackingSession = async ({
     hasCoords: !!coords,
   });
 
-  if (ENABLE_BACKGROUND_LOCATION_UPDATES) {
+  if (ENABLE_BACKGROUND_LOCATION_UPDATES && isNativeBackgroundTrackingSupported) {
     const foregroundPermission = await Location.requestForegroundPermissionsAsync();
     console.log('[tracking][permissions][foreground]', foregroundPermission);
     if (foregroundPermission.status !== 'granted') {
@@ -334,14 +336,31 @@ export const startTrackingSession = async ({
     }) : null,
   };
 
-  await writeSession(session);
-  await writeQueue([]);
+  if (isNativeBackgroundTrackingSupported) {
+    await writeSession(session);
+    await writeQueue([]);
+  }
 
-  if (!ENABLE_BACKGROUND_LOCATION_UPDATES) {
+  if (Platform.OS === 'web') {
+    webTrackingSession = {
+      ...session,
+      startedAt: new Date().toISOString(),
+      lastPoint: coords ? getPointSummary({
+        fechaHora: new Date().toISOString(),
+        latitud: coords?.latitude,
+        longitud: coords?.longitude,
+        accuracy: coords?.accuracy,
+        source: 'ingreso',
+      }) : null,
+    };
+  }
+
+  if (!ENABLE_BACKGROUND_LOCATION_UPDATES || !isNativeBackgroundTrackingSupported) {
     return {
       started: true,
       sessionId: session.sessionId,
       backgroundUpdates: false,
+      webFallback: Platform.OS === 'web',
     };
   }
 
@@ -381,14 +400,14 @@ export const stopTrackingSession = async ({
   codEmp,
   coords,
 }) => {
-  if (!isEnabled) {
+  if (!isTrackingSessionSupported) {
     return { stopped: false, skipped: true, reason: 'tracking_disabled' };
   }
 
-  const session = await readSession();
+  const session = isNativeBackgroundTrackingSupported ? await readSession() : webTrackingSession;
   let flushResult = { sent: 0, skipped: true };
 
-  if (ENABLE_BACKGROUND_LOCATION_UPDATES) {
+  if (ENABLE_BACKGROUND_LOCATION_UPDATES && isNativeBackgroundTrackingSupported) {
     flushResult = await flushQueuedPoints();
     const isRunning = await Location.hasStartedLocationUpdatesAsync(TRACKING_TASK_NAME);
     if (isRunning) {
@@ -412,7 +431,62 @@ export const stopTrackingSession = async ({
     }
   }
 
-  await deleteFileIfExists(SESSION_FILE);
-  await writeQueue([]);
+  if (isNativeBackgroundTrackingSupported) {
+    await deleteFileIfExists(SESSION_FILE);
+    await writeQueue([]);
+  }
+  if (Platform.OS === 'web') {
+    webTrackingSession = null;
+  }
   return { stopped: true, flushResult };
+};
+
+export const sendWebTrackingPoint = async (coords) => {
+  if (Platform.OS !== 'web') {
+    return { sent: 0, skipped: true, reason: 'not_web' };
+  }
+
+  if (!webTrackingSession?.sessionId) {
+    return { sent: 0, skipped: true, reason: 'no_web_session' };
+  }
+
+  const point = normalizePoint(
+    {
+      coords: {
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
+        accuracy: coords?.accuracy,
+        speed: coords?.speed,
+        heading: coords?.heading,
+      },
+      timestamp: Date.now(),
+    },
+    webTrackingSession
+  );
+
+  if (!point) {
+    return { sent: 0, skipped: true, reason: 'invalid_point' };
+  }
+
+  if (isPointNearLastPoint(point, webTrackingSession.lastPoint)) {
+    return { sent: 0, skipped: true, reason: 'duplicate_point' };
+  }
+
+  try {
+    await sendTrackingPointsBatchRequest({
+      sessionId: webTrackingSession.sessionId,
+      codEmp: webTrackingSession.codEmp,
+      usuarioAct: webTrackingSession.usuarioAct,
+      points: [point],
+    });
+    webTrackingSession = {
+      ...webTrackingSession,
+      lastPoint: getPointSummary(point),
+      lastSyncAt: new Date().toISOString(),
+    };
+    return { sent: 1 };
+  } catch (error) {
+    console.warn('[tracking][web][sendWebTrackingPoint]', error?.message);
+    return { sent: 0, error: error?.message || String(error) };
+  }
 };

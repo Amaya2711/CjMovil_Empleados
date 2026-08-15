@@ -101,6 +101,7 @@ const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
 
 const getPointSummary = (point) => ({
   fechaHora: point?.fechaHora ?? null,
+  capturedAtMs: Number.isFinite(Number(point?.capturedAtMs)) ? Number(point.capturedAtMs) : null,
   latitud: point?.latitud ?? null,
   longitud: point?.longitud ?? null,
   accuracy: point?.accuracy ?? null,
@@ -141,6 +142,16 @@ const formatLimaDateTime = (timestamp = Date.now()) => {
 
 const isPointNearLastPoint = (currentPoint, lastPoint) => {
   if (!currentPoint || !lastPoint) return false;
+
+  const currentCapturedAt = Number(currentPoint.capturedAtMs);
+  const lastCapturedAt = Number(lastPoint.capturedAtMs);
+  if (Number.isFinite(currentCapturedAt) && Number.isFinite(lastCapturedAt)) {
+    const elapsedMs = currentCapturedAt - lastCapturedAt;
+    if (elapsedMs < TRACKING_TIME_INTERVAL_MS) {
+      return true;
+    }
+  }
+
   const distance = calculateDistanceMeters(
     currentPoint.latitud,
     currentPoint.longitud,
@@ -174,6 +185,7 @@ const normalizePoint = (location, session) => {
     codEmp: session?.codEmp || null,
     usuarioAct: session?.usuarioAct || null,
     fechaHora: formatLimaDateTime(location?.timestamp) || formatLimaDateTime(),
+    capturedAtMs: Number.isFinite(Number(location?.timestamp)) ? Number(location.timestamp) : Date.now(),
     latitud: Number(coords.latitude),
     longitud: Number(coords.longitude),
     accuracy: Number.isFinite(accuracy) ? accuracy : null,
@@ -361,6 +373,7 @@ export const startTrackingSession = async ({
     startedAt: new Date().toISOString(),
     lastPoint: coords ? getPointSummary({
       fechaHora: formatLimaDateTime(),
+      capturedAtMs: Date.now(),
       latitud: coords?.latitude,
       longitud: coords?.longitude,
       accuracy: coords?.accuracy,
@@ -379,6 +392,7 @@ export const startTrackingSession = async ({
       startedAt: new Date().toISOString(),
       lastPoint: coords ? getPointSummary({
         fechaHora: formatLimaDateTime(),
+        capturedAtMs: Date.now(),
         latitud: coords?.latitude,
         longitud: coords?.longitude,
         accuracy: coords?.accuracy,

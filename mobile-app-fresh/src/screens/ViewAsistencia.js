@@ -18,6 +18,7 @@ import {
 import {
   ENABLE_BACKGROUND_LOCATION_TRACKING,
   ASISTENCIA_TRACKING_ROLLBACK_MARKER,
+  TRACKING_TIME_INTERVAL_MS,
 } from '../features/asistenciaTracking/config';
 // Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
 const ASISTENCIA_FRONTEND_DEPLOY_MARKER = 'frontend-2026-07-06-v2';
@@ -160,7 +161,7 @@ export default function ViewAsistencia() {
       } catch (error) {
         console.warn('[ViewAsistencia][WEB_TRACKING_POINT_WARN]', error?.message || error);
       }
-    }, 60000);
+    }, TRACKING_TIME_INTERVAL_MS);
   }, [clearWebTrackingTimer, registerActionRunning]);
 
   useEffect(() => {

@@ -195,8 +195,11 @@ export const registerAsistencia = async (req, res) => {
       return res.status(500).json({ message: errorMsg || 'Error al registrar asistencia 1' });
     }
     
-    const resultRows = Array.isArray(result) ? result : [];
-    const asistenciaRegistrada = resultRows.length > 0;
+    const resultRows = Array.isArray(result?.recordset) ? result.recordset : [];
+    const rowsAffected = Array.isArray(result?.rowsAffected)
+      ? result.rowsAffected.reduce((total, current) => total + (Number(current) || 0), 0)
+      : 0;
+    const asistenciaRegistrada = resultRows.length > 0 || rowsAffected > 0;
     let trackingSession = null;
 
     if (asistenciaRegistrada && tipoNormalizado === 'INGRESO' && ENABLE_ASISTENCIA_TRACKING_V1) {
@@ -221,6 +224,7 @@ export const registerAsistencia = async (req, res) => {
     console.log('[registerAsistencia][FINAL_RESPONSE]', {
       asistenciaRegistrada,
       resultRows: resultRows.length,
+      rowsAffected,
       imagenEnviada: !!imagenBase64,
       imagenSubida: uploadResult?.success || false,
       imagenSharePointUrl: imagenSharePointUrl || null,
@@ -233,12 +237,13 @@ export const registerAsistencia = async (req, res) => {
         deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER,
         message: 'La marcacion no fue registrada por la base de datos. Verifique restricciones de asistencia o intente nuevamente.',
         result: resultRows,
+        rowsAffected,
         imageUpload: uploadResult,
         imagen: imagenSharePointUrl,
       });
     }
     
-    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, imageUpload: uploadResult, imagen: imagenSharePointUrl, trackingSession });
+    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, rowsAffected, imageUpload: uploadResult, imagen: imagenSharePointUrl, trackingSession });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

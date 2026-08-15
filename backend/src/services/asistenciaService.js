@@ -158,10 +158,10 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, co
     request.input('EstadoMarcacion', sql.Int, estadoMarcacionValue);
   }
   const result = await request.execute('sp_Asistencia_Marcar');
-  const rows = result.recordset || [];
-  
-  // No convertir, dejar tal cual para que el cliente lo interprete
-  return rows;
+
+  // Devolver el resultado completo para que el controlador pueda decidir
+  // éxito tanto por filas retornadas como por rowsAffected.
+  return result;
 };
 
 export const cargarListadoDiarioService = async (usuarioCre) => {

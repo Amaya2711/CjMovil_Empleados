@@ -262,6 +262,13 @@ export const startAsistenciaTrackingSessionService = async ({
 
   const existingSessionId = existing.recordset?.[0]?.SesionId ?? null;
   if (existingSessionId) {
+    const refreshRequest = pool.request();
+    refreshRequest.input('SesionId', sql.BigInt, existingSessionId);
+    await refreshRequest.query(`
+      UPDATE dbo.AsistenciaTrackingSesion
+      SET UpdatedAt = SYSDATETIME()
+      WHERE SesionId = @SesionId
+    `);
     return { sessionId: existingSessionId, reused: true };
   }
 
@@ -340,6 +347,13 @@ export const saveAsistenciaTrackingPointsBatchService = async ({
     }
 
     await transaction.commit();
+    const heartbeatRequest = pool.request();
+    heartbeatRequest.input('SesionId', sql.BigInt, Number(sessionId));
+    await heartbeatRequest.query(`
+      UPDATE dbo.AsistenciaTrackingSesion
+      SET UpdatedAt = SYSDATETIME()
+      WHERE SesionId = @SesionId
+    `);
     console.log('[saveAsistenciaTrackingPointsBatchService][COMMIT]', {
       sessionId,
       insertedCount,

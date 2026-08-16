@@ -370,4 +370,13 @@ export const getPendingAsistenciaCount = async () => {
   return Number(row?.Total ?? 0);
 };
 
+export const getPendingAsistenciaRecords = async () => {
+  const db = await ensureSchemaAsync();
+  return db.getAllAsync(
+    `SELECT IdLocal, Modulo, Operacion, FechaRegistro, Intentos, Sincronizado, FechaSincronizacion, Payload
+     FROM ${QUEUE_TABLE}
+     ORDER BY FechaRegistro DESC, IdLocal DESC`
+  );
+};
+
 export const isNativeAsistenciaQueueSupported = Platform.OS === 'android' || Platform.OS === 'ios';

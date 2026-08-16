@@ -18,13 +18,14 @@ import {
 import {
   registerAsistenciaQueued,
   syncPendingAsistenciaQueue,
+  getPendingAsistenciaRecords,
 } from '../db/asistenciaSyncQueue';
 import {
   ENABLE_BACKGROUND_LOCATION_TRACKING,
   ASISTENCIA_TRACKING_ROLLBACK_MARKER,
   TRACKING_TIME_INTERVAL_MS,
 } from '../features/asistenciaTracking/config';
-// Devuelve la hora en la zona America/Lima; si Intl/timeZone no estÃ¡ disponible, aplica UTC-5
+// Devuelve la hora en la zona America/Lima; si Intl/timeZone no estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ disponible, aplica UTC-5
 const ASISTENCIA_FRONTEND_DEPLOY_MARKER = 'frontend-2026-07-06-v2';
 
 const getLimaDateParts = () => {
@@ -100,7 +101,7 @@ export default function ViewAsistencia() {
     { maxHeight: 720, compress: 0.35 },
     { maxHeight: 600, compress: 0.25 },
   ];
-  const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicaciÃ³n para registrar INGRESO o SALIDA. Sin ubicaciÃ³n no se grabarÃ¡ la marcaciÃ³n.';
+  const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n para registrar INGRESO o SALIDA. Sin ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no se grabarÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ la marcaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n.';
   const { codEmp, idusuario, cuadrilla } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('REGISTRO');
   const [selectedResumenEstado, setSelectedResumenEstado] = useState(null);
@@ -130,6 +131,9 @@ export default function ViewAsistencia() {
   const [pendingSalidaCoords, setPendingSalidaCoords] = useState(null);
   const [pendingSalidaWarning, setPendingSalidaWarning] = useState('');
   const [confirmSalidaLoading, setConfirmSalidaLoading] = useState(false);
+  const [syncDebugVisible, setSyncDebugVisible] = useState(false);
+  const [syncDebugLoading, setSyncDebugLoading] = useState(false);
+  const [syncDebugRows, setSyncDebugRows] = useState([]);
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
   const webTrackingTimerRef = useRef(null);
@@ -168,6 +172,21 @@ export default function ViewAsistencia() {
     }, TRACKING_TIME_INTERVAL_MS);
   }, [clearWebTrackingTimer, registerActionRunning]);
 
+  const loadSyncDebugRows = useCallback(async () => {
+    setSyncDebugLoading(true);
+    try {
+      const rows = await getPendingAsistenciaRecords();
+      setSyncDebugRows(Array.isArray(rows) ? rows : []);
+      setSyncDebugVisible(true);
+    } catch (error) {
+      console.warn('[ViewAsistencia][SYNC_DEBUG_WARN]', error?.message || error);
+      setMessage('No se pudo leer la cola local de asistencia.');
+    } finally {
+      setSyncDebugLoading(false);
+    }
+  }, []);
+
+
   useEffect(() => {
     console.log('[ViewAsistencia][DEPLOY_MARKER]', ASISTENCIA_FRONTEND_DEPLOY_MARKER);
   }, []);
@@ -183,7 +202,7 @@ export default function ViewAsistencia() {
   const formatDate = (val) => {
     if (!val && val !== 0) return '';
     try {
-      // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversiÃ³n de zona horaria
+      // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n de zona horaria
       if (typeof val === 'string') {
         const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (match) {
@@ -209,7 +228,7 @@ export default function ViewAsistencia() {
         const formatDateDayMonth = (val) => {
           if (!val && val !== 0) return '';
           try {
-            // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversiÃ³n de zona horaria
+            // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n de zona horaria
             if (typeof val === 'string') {
               const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
               if (match) {
@@ -304,7 +323,7 @@ export default function ViewAsistencia() {
           const raw = String(referenceValue).trim();
           if (!raw) return null;
 
-          // Formato tÃ­pico: "lat,lon" o "lat;lon" o "lat lon"
+          // Formato tÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­pico: "lat,lon" o "lat;lon" o "lat lon"
           const pairMatch = raw.match(/^\s*(-?\d+(?:[\.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[\.,]\d+)?)\s*$/);
           if (pairMatch) {
             const normalized = normalizeLatLon(pairMatch[1], pairMatch[2]);
@@ -369,7 +388,7 @@ export default function ViewAsistencia() {
             if (!idEmpleado) {
               setData([]);
               setApiDebug(`fetchData:invalid-idEmpleado codEmp=${String(codEmp ?? '')}`);
-              setMessage('No se pudo cargar asistencia: el usuario no tiene un cÃ³digo de empleado numÃ©rico vÃ¡lido (CodEmp).');
+              setMessage('No se pudo cargar asistencia: el usuario no tiene un cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³digo de empleado numÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©rico vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido (CodEmp).');
               return;
             }
             const constanteOficinas = await getConstanteOficinas();
@@ -400,7 +419,7 @@ export default function ViewAsistencia() {
                 setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
               }
               setApiDebug(`listado-diario:${technicalDetail}`);
-              console.warn('ValidaciÃ³n listado diario omitida:', technicalDetail);
+              console.warn('ValidaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n listado diario omitida:', technicalDetail);
               setIdEstadoDiario(null);
             } else {
               const validacion = await validarListadoDiario({ usuarioCre });
@@ -412,7 +431,7 @@ export default function ViewAsistencia() {
                   setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
                 }
                 setApiDebug(`listado-diario:${technicalDetail}`);
-                console.warn('ValidaciÃ³n listado diario fallÃ³:', technicalDetail);
+                console.warn('ValidaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n listado diario fallÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³:', technicalDetail);
                 setIdEstadoDiario(null);
               } else {
                 const listadoDiario = Array.isArray(validacion?.data)
@@ -429,7 +448,7 @@ export default function ViewAsistencia() {
             const res = await getAsistencia({ codEmp: idEmpleado });
             if (!mounted.current) return;
             if (!res) {
-              setMessage('Respuesta vacÃ­a del servidor');
+              setMessage('Respuesta vacÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a del servidor');
               setData([]);
               setApiDebug('null');
             } else if (res.error) {
@@ -471,7 +490,7 @@ export default function ViewAsistencia() {
         useEffect(() => {
           const distance = getDistanceToRequiredPoint(currentCoords);
           if (distance !== null && distance > MAX_DISTANCE_METERS) {
-            setMessage('La ubicaciÃ³n no es cercana al punto requerido (mÃ¡ximo 50 metros).');
+            setMessage('La ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no es cercana al punto requerido (mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ximo 50 metros).');
           }
         }, [currentCoords, valorFin]);
 
@@ -509,11 +528,11 @@ export default function ViewAsistencia() {
               Math.abs(Number(longitude) - (-122.084)) < 0.0006;
 
             if (!isFiniteCoords) {
-              throw new Error('No se pudo obtener coordenadas vÃ¡lidas del GPS.');
+              throw new Error('No se pudo obtener coordenadas vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lidas del GPS.');
             }
 
             if ((Platform.OS === 'android' && loc?.mocked) || isDefaultAndroidEmulatorPoint) {
-              throw new Error('El emulador estÃ¡ usando ubicaciÃ³n por defecto. Configure una ubicaciÃ³n en el emulador o use un dispositivo fÃ­sico.');
+              throw new Error('El emulador estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ usando ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n por defecto. Configure una ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n en el emulador o use un dispositivo fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­sico.');
             }
             return { latitude, longitude, accuracy };
           } catch (e) {
@@ -594,12 +613,12 @@ export default function ViewAsistencia() {
           if (registerActionRunning) return;
           setRegisterActionRunning(true);
           if (tipo === 'INGRESO') {
-            console.log('[INGRESO][CLICK] BotÃ³n INGRESO presionado');
+            console.log('[INGRESO][CLICK] BotÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n INGRESO presionado');
           }
           if (tipo === 'SALIDA') {
-            console.log('[SALIDA][CLICK] BotÃ³n SALIDA presionado');
+            console.log('[SALIDA][CLICK] BotÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n SALIDA presionado');
           }
-          // Verificar permiso y estado de ubicaciÃ³n
+          // Verificar permiso y estado de ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
@@ -629,13 +648,13 @@ export default function ViewAsistencia() {
             }
             let warningMessage = '';
             if (coords?.accuracy && coords.accuracy > MAX_GPS_ACCURACY_METERS) {
-              warningMessage = `PrecisiÃ³n GPS insuficiente. Debe ser â‰¤ ${MAX_GPS_ACCURACY_METERS} m.`;
+              warningMessage = `PrecisiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n GPS insuficiente. Debe ser ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ ${MAX_GPS_ACCURACY_METERS} m.`;
             }
             const distance = getDistanceToRequiredPoint(coords);
             if (distance !== null && distance > MAX_DISTANCE_METERS) {
               warningMessage = warningMessage
-                ? `${warningMessage} La ubicaciÃ³n no es cercana al punto requerido (mÃ¡ximo 50 metros).`
-                : 'La ubicaciÃ³n no es cercana al punto requerido (mÃ¡ximo 50 metros).';
+                ? `${warningMessage} La ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no es cercana al punto requerido (mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ximo 50 metros).`
+                : 'La ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no es cercana al punto requerido (mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ximo 50 metros).';
             }
             if (tipo === 'INGRESO') {
               setPendingIngresoCoords(coords);
@@ -673,7 +692,7 @@ export default function ViewAsistencia() {
             });
           }
           if (!usuarioAct) {
-            setMessage('No se pudo registrar asistencia: no hay un cÃ³digo de empleado numÃ©rico vÃ¡lido (CodEmp).');
+            setMessage('No se pudo registrar asistencia: no hay un cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³digo de empleado numÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©rico vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido (CodEmp).');
             return;
           }
 
@@ -710,30 +729,30 @@ export default function ViewAsistencia() {
           if (res && !res.error && res.success === true) {
             let msg = `${tipo} registrado correctamente`;
             if (res.synced === false) {
-              msg = `${tipo} guardado localmente. Pendiente de sincronizaciÃ³n.`;
+              msg = `${tipo} guardado localmente. Pendiente de sincronizaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n.`;
             }
              
-            // ðŸ” VALIDACIÃ“N TEMPORAL: Verificar estado de carga de imagen
+            // ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â VALIDACIÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN TEMPORAL: Verificar estado de carga de imagen
             if (res.synced === true && imagenBase64 && nombreImagen) {
-              console.log('[executeRegister][IMAGE_CHECK] Se enviÃ³ imagen, validando resultado...');
+              console.log('[executeRegister][IMAGE_CHECK] Se enviÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ imagen, validando resultado...');
               console.log('[executeRegister][IMAGE_UPLOAD_RESULT]', res.serverResponse?.imageUpload);
               
               if (res.serverResponse?.imageUpload) {
                 if (res.serverResponse.imageUpload.success === true) {
-                  msg += ' âœ… IMAGEN SUBIDA A SHAREPOINT';
+                  msg += ' ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¦ IMAGEN SUBIDA A SHAREPOINT';
                   console.log('[executeRegister][IMAGE_SUCCESS] URL:', res.serverResponse.imageUpload.fileUrl);
                 } else {
-                  msg += ` âš ï¸ IMAGEN NO SUBIDA: ${res.serverResponse.imageUpload.error || 'Error desconocido'}`;
+                  msg += ` ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â IMAGEN NO SUBIDA: ${res.serverResponse.imageUpload.error || 'Error desconocido'}`;
                   console.warn('[executeRegister][IMAGE_FAILED]', res.serverResponse.imageUpload);
                 }
               } else {
-                msg += ' âš ï¸ NO HAY RESPUESTA DE SHAREPOINT';
+                msg += ' ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¯ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â NO HAY RESPUESTA DE SHAREPOINT';
                 console.warn('[executeRegister][IMAGE_NO_RESPONSE] imageUpload es null/undefined');
               }
             }
             
             if (imagenBase64 && nombreImagen && res.synced === false) {
-              msg += ' | Imagen pendiente de sincronización';
+              msg += ' | Imagen pendiente de sincronizaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n';
             }
 
             if (ENABLE_BACKGROUND_LOCATION_TRACKING && res.synced === true) {
@@ -1014,33 +1033,33 @@ export default function ViewAsistencia() {
 
         const tomarFotoIngreso = async () => {
           try {
-            console.log('[tomarFotoIngreso] Solicitando permiso de cÃ¡mara...');
+            console.log('[tomarFotoIngreso] Solicitando permiso de cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara...');
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            console.log('[tomarFotoIngreso] Estado permiso cÃ¡mara:', status);
+            console.log('[tomarFotoIngreso] Estado permiso cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de camara para tomar foto');
-              console.warn('[tomarFotoIngreso] Permiso cÃ¡mara rechazado');
+              console.warn('[tomarFotoIngreso] Permiso cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara rechazado');
               return;
             }
             
-            console.log('[tomarFotoIngreso] Abriendo cÃ¡mara...');
+            console.log('[tomarFotoIngreso] Abriendo cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara...');
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              // Quality: 1.0 = sin compresiÃ³n (mÃ¡xima calidad HD)
+              // Quality: 1.0 = sin compresiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n (mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡xima calidad HD)
               quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
-            console.log('[tomarFotoIngreso] Resultado cÃ¡mara:', {
+            console.log('[tomarFotoIngreso] Resultado cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[tomarFotoIngreso] âœ“ Foto capturada exitosamente:', {
+              console.log('[tomarFotoIngreso] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Foto capturada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1050,7 +1069,7 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
-                console.error('[tomarFotoIngreso] âœ— Asset sin URI');
+                console.error('[tomarFotoIngreso] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Asset sin URI');
                 return;
               }
               setIngresoFoto(asset);
@@ -1058,7 +1077,7 @@ export default function ViewAsistencia() {
               console.log('[tomarFotoIngreso] Captura cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[tomarFotoIngreso] âœ— Error:', error.message);
+            console.error('[tomarFotoIngreso] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Error:', error.message);
             console.error('[tomarFotoIngreso] Stack:', error.stack);
             setMessage('Error al tomar foto: ' + error.message);
           }
@@ -1066,17 +1085,17 @@ export default function ViewAsistencia() {
 
         const tomarFotoSalida = async () => {
           try {
-            console.log('[tomarFotoSalida] Solicitando permiso de cÃ¡mara...');
+            console.log('[tomarFotoSalida] Solicitando permiso de cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara...');
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            console.log('[tomarFotoSalida] Estado permiso cÃ¡mara:', status);
+            console.log('[tomarFotoSalida] Estado permiso cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de camara para tomar foto');
-              console.warn('[tomarFotoSalida] Permiso cÃ¡mara rechazado');
+              console.warn('[tomarFotoSalida] Permiso cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara rechazado');
               return;
             }
             
-            console.log('[tomarFotoSalida] Abriendo cÃ¡mara...');
+            console.log('[tomarFotoSalida] Abriendo cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara...');
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
@@ -1084,14 +1103,14 @@ export default function ViewAsistencia() {
               base64: false,
             });
             
-            console.log('[tomarFotoSalida] Resultado cÃ¡mara:', {
+            console.log('[tomarFotoSalida] Resultado cÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡mara:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[tomarFotoSalida] âœ“ Foto capturada exitosamente:', {
+              console.log('[tomarFotoSalida] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Foto capturada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1101,7 +1120,7 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
-                console.error('[tomarFotoSalida] âœ— Asset sin URI');
+                console.error('[tomarFotoSalida] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Asset sin URI');
                 return;
               }
               setSalidaFoto(asset);
@@ -1109,7 +1128,7 @@ export default function ViewAsistencia() {
               console.log('[tomarFotoSalida] Captura cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[tomarFotoSalida] âœ— Error:', error.message);
+            console.error('[tomarFotoSalida] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Error:', error.message);
             console.error('[tomarFotoSalida] Stack:', error.stack);
             setMessage('Error al tomar foto: ' + error.message);
           }
@@ -1117,17 +1136,17 @@ export default function ViewAsistencia() {
 
         const seleccionarImagenSalida = async () => {
           try {
-            console.log('[seleccionarImagenSalida] Solicitando permiso de librerÃ­a de medios...');
+            console.log('[seleccionarImagenSalida] Solicitando permiso de librerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a de medios...');
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            console.log('[seleccionarImagenSalida] Estado permiso galerÃ­a:', status);
+            console.log('[seleccionarImagenSalida] Estado permiso galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de galeria para seleccionar foto');
-              console.warn('[seleccionarImagenSalida] Permiso galerÃ­a rechazado');
+              console.warn('[seleccionarImagenSalida] Permiso galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a rechazado');
               return;
             }
             
-            console.log('[seleccionarImagenSalida] Abriendo galerÃ­a...');
+            console.log('[seleccionarImagenSalida] Abriendo galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a...');
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
@@ -1135,14 +1154,14 @@ export default function ViewAsistencia() {
               base64: false,
             });
             
-            console.log('[seleccionarImagenSalida] Resultado galerÃ­a:', {
+            console.log('[seleccionarImagenSalida] Resultado galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[seleccionarImagenSalida] âœ“ Imagen seleccionada exitosamente:', {
+              console.log('[seleccionarImagenSalida] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Imagen seleccionada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1152,15 +1171,15 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
-                console.error('[seleccionarImagenSalida] âœ— Asset sin URI');
+                console.error('[seleccionarImagenSalida] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Asset sin URI');
                 return;
               }
               setSalidaFoto(asset);
             } else {
-              console.log('[seleccionarImagenSalida] SelecciÃ³n cancelada por el usuario');
+              console.log('[seleccionarImagenSalida] SelecciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[seleccionarImagenSalida] âœ— Error:', error.message);
+            console.error('[seleccionarImagenSalida] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Error:', error.message);
             console.error('[seleccionarImagenSalida] Stack:', error.stack);
             setMessage('Error al seleccionar imagen: ' + error.message);
           }
@@ -1168,33 +1187,33 @@ export default function ViewAsistencia() {
 
         const seleccionarImagenIngreso = async () => {
           try {
-            console.log('[seleccionarImagenIngreso] Solicitando permiso de librerÃ­a de medios...');
+            console.log('[seleccionarImagenIngreso] Solicitando permiso de librerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a de medios...');
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            console.log('[seleccionarImagenIngreso] Estado permiso galerÃ­a:', status);
+            console.log('[seleccionarImagenIngreso] Estado permiso galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de galeria para seleccionar foto');
-              console.warn('[seleccionarImagenIngreso] Permiso galerÃ­a rechazado');
+              console.warn('[seleccionarImagenIngreso] Permiso galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a rechazado');
               return;
             }
             
-            console.log('[seleccionarImagenIngreso] Abriendo galerÃ­a...');
+            console.log('[seleccionarImagenIngreso] Abriendo galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a...');
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              // Quality: 1.0 = sin compresiÃ³n (mÃ¡xima calidad HD)
+              // Quality: 1.0 = sin compresiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n (mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡xima calidad HD)
               quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
-            console.log('[seleccionarImagenIngreso] Resultado galerÃ­a:', {
+            console.log('[seleccionarImagenIngreso] Resultado galerÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­a:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[seleccionarImagenIngreso] âœ“ Imagen seleccionada exitosamente:', {
+              console.log('[seleccionarImagenIngreso] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Imagen seleccionada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1204,15 +1223,15 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
-                console.error('[seleccionarImagenIngreso] âœ— Asset sin URI');
+                console.error('[seleccionarImagenIngreso] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Asset sin URI');
                 return;
               }
               setIngresoFoto(asset);
             } else {
-              console.log('[seleccionarImagenIngreso] SelecciÃ³n cancelada por el usuario');
+              console.log('[seleccionarImagenIngreso] SelecciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[seleccionarImagenIngreso] âœ— Error:', error.message);
+            console.error('[seleccionarImagenIngreso] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â Error:', error.message);
             console.error('[seleccionarImagenIngreso] Stack:', error.stack);
             setMessage('Error al seleccionar imagen: ' + error.message);
           }
@@ -1251,7 +1270,7 @@ export default function ViewAsistencia() {
                 const imageBytes = imagenBase64.length * 0.75;
                 const sizeInKB = (imageBytes / 1024).toFixed(2);
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
-                console.log('[confirmIngresoRegister] âœ“ Imagen convertida a base64 - TamaÃ±o:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
+                console.log('[confirmIngresoRegister] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Imagen convertida a base64 - TamaÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±o:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
                 // convertImageToBase64 ya entrega una imagen optimizada <= 5MB o lanza error claro
                 
@@ -1261,10 +1280,10 @@ export default function ViewAsistencia() {
                 const dd = String(d.getDate()).padStart(2, '0');
                 const codEmpArchivo = String(resolveNumericEmployeeId() || 'SINCOD').trim();
                 nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
-                console.log('[confirmIngresoRegister] âœ“ Nombre de imagen asignado:', nombreImagen);
+                console.log('[confirmIngresoRegister] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmIngresoRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
               } catch (error) {
-                console.error('[confirmIngresoRegister] âœ— ERROR imagen:', error.message);
+                console.error('[confirmIngresoRegister] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ERROR imagen:', error.message);
                 console.error('[confirmIngresoRegister] Stack:', error.stack);
                 
                 let userMsg = 'Error al procesar imagen: ';
@@ -1344,7 +1363,7 @@ export default function ViewAsistencia() {
                 const imageBytes = imagenBase64.length * 0.75;
                 const sizeInKB = (imageBytes / 1024).toFixed(2);
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
-                console.log('[confirmSalidaRegister] âœ“ Imagen convertida a base64 - TamaÃ±o:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
+                console.log('[confirmSalidaRegister] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Imagen convertida a base64 - TamaÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±o:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
                 // convertImageToBase64 ya entrega una imagen optimizada <= 5MB o lanza error claro
                 
@@ -1354,10 +1373,10 @@ export default function ViewAsistencia() {
                 const dd = String(d.getDate()).padStart(2, '0');
                 const codEmpArchivo = String(resolveNumericEmployeeId() || 'SINCOD').trim();
                 nombreImagen = `SALIDA_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
-                console.log('[confirmSalidaRegister] âœ“ Nombre de imagen asignado:', nombreImagen);
+                console.log('[confirmSalidaRegister] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmSalidaRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
               } catch (error) {
-                console.error('[confirmSalidaRegister] âœ— ERROR imagen:', error.message);
+                console.error('[confirmSalidaRegister] ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ERROR imagen:', error.message);
                 console.error('[confirmSalidaRegister] Stack:', error.stack);
                 
                 let userMsg = 'Error al procesar imagen: ';
@@ -1378,7 +1397,7 @@ export default function ViewAsistencia() {
               }
             }
             
-            // IMPORTANTE: Obtener comentario existente del Ãºltimo registro y agregarlo
+            // IMPORTANTE: Obtener comentario existente del ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºltimo registro y agregarlo
             const source = Array.isArray(data) ? data : [];
             let comentarioCompleto = comentario;
             if (source.length > 0) {
@@ -1409,19 +1428,19 @@ export default function ViewAsistencia() {
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
-            setMessage('Permiso de ubicaciÃ³n no otorgado. Active la ubicaciÃ³n para continuar.');
+            setMessage('Permiso de ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no otorgado. Active la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n para continuar.');
             return;
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicaciÃ³n del dispositivo estÃ¡ desactivada. Active la ubicaciÃ³n para continuar.');
+            setMessage('La ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n del dispositivo estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ desactivada. Active la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n para continuar.');
             return;
           }
           try {
             setLoadingCompareLocation(true);
             const refCoords = parseReferenceCoords(valorFin);
             if (!refCoords) {
-              setMessage('No se pudo obtener un punto vÃ¡lido en ValorFin para comparar.');
+              setMessage('No se pudo obtener un punto vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido en ValorFin para comparar.');
               return;
             }
             const coords = await getCurrentPosition();
@@ -1434,12 +1453,12 @@ export default function ViewAsistencia() {
             }
             const formattedDistance = `${distance.toFixed(2)} m`;
             if (distance <= MAX_DISTANCE_METERS) {
-              setMessage(`UbicaciÃ³n vÃ¡lida. Distancia al punto requerido: ${formattedDistance}.`);
+              setMessage(`UbicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida. Distancia al punto requerido: ${formattedDistance}.`);
             } else {
-              setMessage(`La ubicaciÃ³n no es cercana al punto requerido. Distancia: ${formattedDistance}. MÃ¡ximo permitido: ${MAX_DISTANCE_METERS} m.`);
+              setMessage(`La ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no es cercana al punto requerido. Distancia: ${formattedDistance}. MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ximo permitido: ${MAX_DISTANCE_METERS} m.`);
             }
           } catch (e) {
-            setMessage('No se pudo comparar la ubicaciÃ³n actual con ValorFin.');
+            setMessage('No se pudo comparar la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n actual con ValorFin.');
           } finally {
             setLoadingCompareLocation(false);
           }
@@ -1453,12 +1472,12 @@ export default function ViewAsistencia() {
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
-            setMessage('Permiso de ubicaciÃ³n no otorgado. Active la ubicaciÃ³n para continuar.');
+            setMessage('Permiso de ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n no otorgado. Active la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n para continuar.');
             return;
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicaciÃ³n del dispositivo estÃ¡ desactivada. Active la ubicaciÃ³n para continuar.');
+            setMessage('La ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n del dispositivo estÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ desactivada. Active la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n para continuar.');
             return;
           }
           try {
@@ -1525,7 +1544,7 @@ export default function ViewAsistencia() {
                         const latSalida = item.LatitudSalida ?? item.latitudSalida ?? null;
                         const lonSalida = item.LongitudSalida ?? item.longitudSalida ?? null;
                         if (!latSalida || !lonSalida) {
-                          setMessage('UbicaciÃ³n de salida no encontrada');
+                          setMessage('UbicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n de salida no encontrada');
                           return;
                         }
                         const url = `https://www.google.com/maps/search/?api=1&query=${latSalida},${lonSalida}`;
@@ -1642,7 +1661,7 @@ export default function ViewAsistencia() {
           <Card style={{ marginBottom: 8 }}>
             <Card.Content>
               <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTime(item.Hora ?? item.hora ?? '')}</Text>
-              <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  MarcaciÃ³n: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
+              <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  MarcaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
               <Text>{`Ingreso: ${formatTime(item.Hora ?? item.hora ?? '')} | Salida: ${formatTime(item.HoraSalida ?? item.horaSalida ?? '')} | Tiempo Trabajado: ${formatTime(item.TiempoTrabajado ?? item.tiempoTrabajado ?? '')}`}</Text>
               <Text numberOfLines={2} ellipsizeMode="tail">{JSON.stringify(item)}</Text>
             </Card.Content>
@@ -1675,11 +1694,11 @@ export default function ViewAsistencia() {
               {!hasLocation && (
                 <Card style={{ marginBottom: 12, padding: 10, backgroundColor: '#fff3f3' }}>
                   <Card.Content>
-                    <Text style={{ color: '#a00', fontWeight: '700' }}>UbicaciÃ³n desactivada</Text>
-                    <Text>Active la ubicaciÃ³n o permisos para registrar INGRESO/SALIDA.</Text>
+                    <Text style={{ color: '#a00', fontWeight: '700' }}>UbicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n desactivada</Text>
+                    <Text>Active la ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n o permisos para registrar INGRESO/SALIDA.</Text>
                     <View style={{ marginTop: 8 }}>
                         <Button mode="outlined" onPress={() => openLocationSettings()}>
-                          Abrir configuraciÃ³n
+                          Abrir configuraciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n
                         </Button>
                     </View>
                   </Card.Content>
@@ -1719,20 +1738,29 @@ export default function ViewAsistencia() {
                     loading={loadingCurrentLocation}
                     disabled={loadingCurrentLocation || !hasLocation}
                   >
-                    VER UBICACIÃ“N ACTUAL
+                    VER UBICACIÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œN ACTUAL
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={loadSyncDebugRows}
+                    style={styles.locationButton}
+                    loading={syncDebugLoading}
+                    disabled={syncDebugLoading}
+                  >
+                    VER COLA LOCAL
                   </Button>
                 </>
               )}
 
             <Portal>
               <Dialog visible={locationDialogVisible} onDismiss={closeLocationDialog}>
-                <Dialog.Title>Abrir ubicaciÃ³n actual</Dialog.Title>
+                <Dialog.Title>Abrir ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n actual</Dialog.Title>
                 <Dialog.Content>
-                  <Text>Â¿Desea visualizar su ubicaciÃ³n actual en Google Maps?</Text>
+                  <Text>ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¿Desea visualizar su ubicaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n actual en Google Maps?</Text>
                 </Dialog.Content>
                 <Dialog.Actions>
                   <Button onPress={closeLocationDialog}>No</Button>
-                  <Button onPress={openCurrentLocationInMap} loading={loadingCurrentLocation} disabled={loadingCurrentLocation}>SÃ­, ver en mapa</Button>
+                  <Button onPress={openCurrentLocationInMap} loading={loadingCurrentLocation} disabled={loadingCurrentLocation}>SÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­, ver en mapa</Button>
                 </Dialog.Actions>
               </Dialog>
 
@@ -1747,7 +1775,7 @@ export default function ViewAsistencia() {
                     maxLength={250}
                     multiline
                     numberOfLines={4}
-                    placeholder="Escriba aquÃ­ el motivo..."
+                    placeholder="Escriba aquÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­ el motivo..."
                     textColor="#231F36"
                     style={styles.ingresoCommentInput}
                   />
@@ -1811,7 +1839,7 @@ export default function ViewAsistencia() {
                     maxLength={250}
                     multiline
                     numberOfLines={4}
-                    placeholder="Escriba aquÃ­ el motivo..."
+                    placeholder="Escriba aquÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­ el motivo..."
                     textColor="#231F36"
                     style={styles.ingresoCommentInput}
                   />
@@ -1861,6 +1889,40 @@ export default function ViewAsistencia() {
                 <Dialog.Actions>
                   <Button onPress={closeSalidaDialog} disabled={confirmSalidaLoading}>Cancelar</Button>
                   <Button onPress={confirmSalidaRegister} loading={confirmSalidaLoading} disabled={confirmSalidaLoading || registerActionRunning || !salidaFoto}>Aceptar</Button>
+                </Dialog.Actions>
+              </Dialog>
+
+              <Dialog visible={syncDebugVisible} onDismiss={() => setSyncDebugVisible(false)}>
+                <Dialog.Title>Cola local de asistencia</Dialog.Title>
+                <Dialog.Content>
+                  <Text style={{ marginBottom: 8 }}>
+                    {syncDebugRows.length} registro(s) encontrados en SyncPendiente.
+                  </Text>
+                  <ScrollView style={styles.debugList} contentContainerStyle={{ paddingBottom: 12 }}>
+                    {syncDebugRows.length === 0 ? (
+                      <Text style={styles.debugEmpty}>No hay registros locales pendientes.</Text>
+                    ) : (
+                      syncDebugRows.map((item) => (
+                        <Card key={String(item.IdLocal)} style={styles.debugCard}>
+                          <Card.Content>
+                            <Text style={styles.debugTitle}>{String(item.Operacion || "ASISTENCIA")}</Text>
+                            <Text style={styles.debugLine}>Id: {String(item.IdLocal || "")}</Text>
+                            <Text style={styles.debugLine}>Fecha: {String(item.FechaRegistro || "")}</Text>
+                            <Text style={styles.debugLine}>Intentos: {String(item.Intentos || 0)} | Sync: {String(item.Sincronizado || 0)}</Text>
+                            <Text style={styles.debugLine} numberOfLines={4} ellipsizeMode="tail">
+                              Payload: {String(item.Payload || "")}
+                            </Text>
+                          </Card.Content>
+                        </Card>
+                      ))
+                    )}
+                  </ScrollView>
+                </Dialog.Content>
+                <Dialog.Actions>
+                  <Button onPress={() => setSyncDebugVisible(false)}>Cerrar</Button>
+                  <Button onPress={loadSyncDebugRows} loading={syncDebugLoading} disabled={syncDebugLoading}>
+                    Recargar
+                  </Button>
                 </Dialog.Actions>
               </Dialog>
 
@@ -1962,6 +2024,11 @@ export default function ViewAsistencia() {
         deleteTestButton: { marginBottom: 8 },
         snackbarWrapper: { top: 16, zIndex: 9999, elevation: 9999 },
         locationButton: { marginBottom: 12 },
+        debugList: { maxHeight: 360 },
+        debugCard: { marginBottom: 10, backgroundColor: '#fff' },
+        debugTitle: { fontSize: 15, fontWeight: '700', color: '#231F36', marginBottom: 4 },
+        debugLine: { fontSize: 12, color: '#444', marginBottom: 2 },
+        debugEmpty: { color: '#666', fontStyle: 'italic' },
         ingresoCommentInput: { backgroundColor: '#fff' },
         cardGrid: { flex: 1, marginTop: 8, minHeight: 720, paddingVertical: 8 },
         chartBox: { marginBottom: 12, padding: 12, borderWidth: 1, borderColor: '#eee', borderRadius: 8, backgroundColor: '#fff' },
@@ -2019,4 +2086,3 @@ export default function ViewAsistencia() {
         const ss = String(t.getSeconds()).padStart(2, '0');
         return <RNText style={styles.timeValue}>{`${hh}:${mm}:${ss}`}</RNText>;
       }
-

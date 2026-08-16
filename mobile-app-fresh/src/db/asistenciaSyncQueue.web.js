@@ -49,4 +49,6 @@ export const registerAsistenciaQueued = async (payload = {}) => {
 
 export const getPendingAsistenciaCount = async () => 0;
 
+export const getPendingAsistenciaRecords = async () => [];
+
 export const isNativeAsistenciaQueueSupported = false;

@@ -201,6 +201,7 @@ export const registerAsistencia = async (req, res) => {
       : 0;
     const asistenciaRegistrada = resultRows.length > 0 || rowsAffected > 0;
     let trackingSession = null;
+    let trackingSessionClose = null;
     let asistenciaUpdate = null;
 
     if (asistenciaRegistrada) {
@@ -236,6 +237,21 @@ export const registerAsistencia = async (req, res) => {
       }
     }
 
+    if (asistenciaRegistrada && tipoNormalizado === 'SALIDA' && ENABLE_ASISTENCIA_TRACKING_V1) {
+      try {
+        trackingSessionClose = await stopAsistenciaTrackingSessionService({
+          usuarioAct: usuarioActValue,
+          codEmp: codEmpArchivo,
+          latitudSalida: lat,
+          longitudSalida: lon,
+          accuracySalida: req.body?.accuracy ?? null,
+        });
+        console.log('[registerAsistencia][TRACKING_SESSION_CLOSE]', trackingSessionClose);
+      } catch (trackingCloseError) {
+        console.warn('[registerAsistencia][TRACKING_SESSION_CLOSE_WARN]', trackingCloseError?.message || trackingCloseError);
+      }
+    }
+
     console.log('[registerAsistencia][FINAL_RESPONSE]', {
       asistenciaRegistrada,
       resultRows: resultRows.length,
@@ -245,6 +261,7 @@ export const registerAsistencia = async (req, res) => {
       imagenSharePointUrl: imagenSharePointUrl || null,
       asistenciaUpdate,
       trackingSession,
+      trackingSessionClose,
     });
 
     if (!asistenciaRegistrada) {
@@ -259,7 +276,7 @@ export const registerAsistencia = async (req, res) => {
       });
     }
     
-    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, rowsAffected, imageUpload: uploadResult, imagen: imagenSharePointUrl, asistenciaUpdate, trackingSession });
+    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, rowsAffected, imageUpload: uploadResult, imagen: imagenSharePointUrl, asistenciaUpdate, trackingSession, trackingSessionClose });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

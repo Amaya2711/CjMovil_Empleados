@@ -487,6 +487,20 @@ export const stopAsistenciaTrackingSessionService = async ({
   }
 
   if (!sessionIdValue) {
+    const todayRequest = pool.request();
+    todayRequest.input('CodEmp', sql.VarChar(50), String(codEmp || usuarioAct || '').trim());
+    todayRequest.input('FechaAsistencia', sql.Date, getCurrentLimaDate());
+    const fallback = await todayRequest.query(`
+      SELECT TOP (1) SesionId
+      FROM dbo.AsistenciaTrackingSesion
+      WHERE CodEmp = @CodEmp
+        AND FechaAsistencia = @FechaAsistencia
+      ORDER BY SesionId DESC
+    `);
+    sessionIdValue = fallback.recordset?.[0]?.SesionId ?? null;
+  }
+
+  if (!sessionIdValue) {
     return { updated: false, sessionId: null };
   }
 

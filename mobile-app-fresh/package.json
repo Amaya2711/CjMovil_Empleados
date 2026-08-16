@@ -18,6 +18,7 @@
     "expo-network": "~6.0.1",
     "expo-router": "~3.5.0",
     "expo-splash-screen": "~0.27.7",
+    "expo-sqlite": "~14.0.6",
     "expo-status-bar": "~1.12.1",
     "expo-task-manager": "~11.8.2",
     "fast-xml-parser": "^5.3.4",

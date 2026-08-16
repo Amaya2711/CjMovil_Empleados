@@ -8,6 +8,7 @@ import './src/features/asistenciaTracking/backgroundLocationTask';
 import { CommonActions, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { Provider as PaperProvider, DefaultTheme, Button } from 'react-native-paper';
 import AppNavigator from './src/navigation/AppNavigator';
+import { initLocalDatabase } from './src/db/initLocalDatabase';
 
 import LoginScreen from './src/screens/LoginScreen';
 import MainMenuScreen from './src/screens/MainMenuScreen';
@@ -90,6 +91,27 @@ function AppContent() {
       }
     }
     loadFonts();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const setupDatabase = async () => {
+      try {
+        const result = await initLocalDatabase();
+        if (!cancelled) {
+          console.log('[App][SQLite]', result);
+        }
+      } catch (error) {
+        console.warn('[App][SQLite][WARN]', error?.message || error);
+      }
+    };
+
+    setupDatabase();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

@@ -3,6 +3,23 @@ import { BASE_URL } from '../config';
 const API_BASE = '/api/asistencia';
 
 const LISTADO_DIARIO_PATH = '/listado-diario';
+const API_REQUEST_TIMEOUT_MS = 15000;
+
+const fetchJsonWithTimeout = async (url, options = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    return { response, payload };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
 
 export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
   try {
@@ -13,8 +30,7 @@ export const getAsistencia = async ({ codEmp, fechaAsistencia } = {}) => {
     const query = params.toString();
     if (query) url += `?${query}`;
     console.log('[getAsistencia][REQUEST]', { url, codEmp, fechaAsistencia });
-    const res = await fetch(url);
-    const payload = await res.json().catch(() => null);
+    const { response: res, payload } = await fetchJsonWithTimeout(url);
     console.log('[getAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
       const detail = payload?.message || payload?.error || null;
@@ -50,12 +66,11 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
       body.nombreImagen = nombreImagen;
     }
     console.log('[registerAsistencia][REQUEST]', { url, body: { ...body, imagenBase64: body.imagenBase64 ? '...(base64)...' : undefined } });
-    const res = await fetch(url, {
+    const { response: res, payload } = await fetchJsonWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const payload = await res.json().catch(() => null);
     console.log('[registerAsistencia][RESPONSE]', { status: res.status, ok: res.ok, payload });
     if (!res.ok) {
       // Extraer mensaje detallado del servidor
@@ -92,12 +107,11 @@ export const registerAsistencia = async ({ usuarioAct, codEmp, tipo, lat, lon, f
 export const validarListadoDiario = async ({ usuarioCre } = {}) => {
   try {
     const url = `${BASE_URL}${API_BASE}${LISTADO_DIARIO_PATH}`;
-    const res = await fetch(url, {
+    const { response: res, payload } = await fetchJsonWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ usuarioCre }),
     });
-    const payload = await res.json().catch(() => null);
     if (!res.ok) {
       throw new Error(payload?.error || payload?.message || 'Error al validar listado diario');
     }
@@ -110,7 +124,7 @@ export const validarListadoDiario = async ({ usuarioCre } = {}) => {
 export const getConstanteOficinas = async () => {
   try {
     const url = `${BASE_URL}${API_BASE}/constante-oficinas`;
-    const res = await fetch(url);
+    const { response: res } = await fetchJsonWithTimeout(url);
     if (!res.ok) throw new Error('Error al obtener constante de oficinas');
     return await res.json();
   } catch (error) {
@@ -121,7 +135,7 @@ export const getConstanteOficinas = async () => {
 export const eliminarAsistenciaPrueba = async () => {
   try {
     const url = `${BASE_URL}${API_BASE}/eliminar-prueba`;
-    const res = await fetch(url, {
+    const { response: res } = await fetchJsonWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });

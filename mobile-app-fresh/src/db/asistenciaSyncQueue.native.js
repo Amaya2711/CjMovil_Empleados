@@ -327,7 +327,7 @@ export const syncPendingAsistenciaQueue = async () => {
   }
 
   return {
-    success: true,
+    success: isSynced,
     queued: pendingRows.length,
     synced,
     pending: Math.max(pendingRows.length - synced, 0),
@@ -347,10 +347,11 @@ export const registerAsistenciaQueued = async (payload = {}) => {
     : null;
 
   return {
-    success: true,
+    success: isSynced,
     queued: true,
     synced: isSynced,
     localId: queued.localId,
+    queuedLocally: true,
     payload: queued.payload,
     syncResult,
     serverResponse: localDetail?.backendResponse ?? null,

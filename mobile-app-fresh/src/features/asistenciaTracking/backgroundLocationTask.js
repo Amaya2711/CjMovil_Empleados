@@ -437,6 +437,56 @@ export const startTrackingSession = async ({
     await writeQueue([]);
   }
 
+  if (session.sessionId && coords?.latitude !== undefined && coords?.longitude !== undefined) {
+    try {
+      const initialPoint = {
+        sessionId: session.sessionId,
+        codEmp: session.codEmp,
+        usuarioAct: session.usuarioAct,
+        fechaHora: formatLimaDateTime(),
+        capturedAtMs: Date.now(),
+        latitud: Number(coords.latitude),
+        longitud: Number(coords.longitude),
+        accuracy: Number.isFinite(Number(coords?.accuracy)) ? Number(coords.accuracy) : null,
+        speed: Number.isFinite(Number(coords?.speed)) ? Number(coords.speed) : null,
+        heading: Number.isFinite(Number(coords?.heading)) ? Number(coords.heading) : null,
+        source: 'ingreso',
+      };
+
+      await sendTrackingPointsBatchRequest({
+        sessionId: session.sessionId,
+        codEmp: session.codEmp,
+        usuarioAct: session.usuarioAct,
+        points: [initialPoint],
+      });
+
+      if (isNativeBackgroundTrackingSupported) {
+        await writeSession({
+          ...session,
+          lastPoint: getPointSummary(initialPoint),
+          lastSyncAt: new Date().toISOString(),
+        });
+      }
+
+      await appendDebugEvent({
+        type: 'initial_point_sent',
+        sessionId: session.sessionId,
+        point: getPointSummary(initialPoint),
+      });
+      console.log('[tracking][initial_point_sent]', {
+        sessionId: session.sessionId,
+        point: getPointSummary(initialPoint),
+      });
+    } catch (error) {
+      console.warn('[tracking][initial_point_sent][WARN]', error?.message || error);
+      await appendDebugEvent({
+        type: 'initial_point_error',
+        sessionId: session.sessionId,
+        error: error?.message || String(error),
+      });
+    }
+  }
+
   if (Platform.OS === 'web') {
     webTrackingSession = {
       ...session,
@@ -464,12 +514,23 @@ export const startTrackingSession = async ({
   const trackingAccuracy = Location.Accuracy.Highest ?? Location.Accuracy.High;
   const options = {
     accuracy: trackingAccuracy,
-    distanceInterval: TRACKING_DISTANCE_INTERVAL_METERS,
-    deferredUpdatesDistance: TRACKING_DEFERRED_DISTANCE_METERS,
-    deferredUpdatesInterval: TRACKING_DEFERRED_INTERVAL_MS,
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
   };
+
+  if (TRACKING_DISTANCE_INTERVAL_METERS > 0) {
+    options.distanceInterval = TRACKING_DISTANCE_INTERVAL_METERS;
+  } else {
+    options.distanceInterval = 0;
+  }
+
+  if (TRACKING_DEFERRED_DISTANCE_METERS > 0) {
+    options.deferredUpdatesDistance = TRACKING_DEFERRED_DISTANCE_METERS;
+  }
+
+  if (TRACKING_DEFERRED_INTERVAL_MS > 0) {
+    options.deferredUpdatesInterval = TRACKING_DEFERRED_INTERVAL_MS;
+  }
 
   if (Platform.OS === 'android') {
     options.timeInterval = TRACKING_TIME_INTERVAL_MS;

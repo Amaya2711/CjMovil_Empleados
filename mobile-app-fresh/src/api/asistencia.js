@@ -124,9 +124,9 @@ export const validarListadoDiario = async ({ usuarioCre } = {}) => {
 export const getConstanteOficinas = async () => {
   try {
     const url = `${BASE_URL}${API_BASE}/constante-oficinas`;
-    const { response: res } = await fetchJsonWithTimeout(url);
+    const { response: res, payload } = await fetchJsonWithTimeout(url);
     if (!res.ok) throw new Error('Error al obtener constante de oficinas');
-    return await res.json();
+    return payload;
   } catch (error) {
     return { error: true, message: error.message };
   }
@@ -135,12 +135,12 @@ export const getConstanteOficinas = async () => {
 export const eliminarAsistenciaPrueba = async () => {
   try {
     const url = `${BASE_URL}${API_BASE}/eliminar-prueba`;
-    const { response: res } = await fetchJsonWithTimeout(url, {
+    const { response: res, payload } = await fetchJsonWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
     if (!res.ok) throw new Error('Error al ejecutar eliminación de prueba');
-    return await res.json();
+    return payload;
   } catch (error) {
     return { error: true, message: error.message };
   }

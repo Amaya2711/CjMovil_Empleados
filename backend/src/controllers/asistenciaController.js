@@ -1,5 +1,5 @@
 import { ENABLE_ASISTENCIA_TRACKING_V1, ASISTENCIA_TRACKING_ROLLBACK_MARKER } from '../config/featureFlags.js';
-import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService, saveAsistenciaTrackingPointsBatchService, startAsistenciaTrackingSessionService, stopAsistenciaTrackingSessionService } from '../services/asistenciaService.js';
+import { cargarListadoDiarioService, constanteOficinasService, eliminarAsistenciaPruebaService, getAsistenciaService, registerAsistenciaService, saveAsistenciaTrackingPointsBatchService, startAsistenciaTrackingSessionService, stopAsistenciaTrackingSessionService, updateAsistenciaMainRecordService } from '../services/asistenciaService.js';
 import { uploadImageSafely } from '../services/sharePointService.js';
 
 const ASISTENCIA_BACKEND_DEPLOY_MARKER = 'backend-2026-07-06-v2';
@@ -201,6 +201,21 @@ export const registerAsistencia = async (req, res) => {
       : 0;
     const asistenciaRegistrada = resultRows.length > 0 || rowsAffected > 0;
     let trackingSession = null;
+    let asistenciaUpdate = null;
+
+    if (asistenciaRegistrada) {
+      try {
+        asistenciaUpdate = await updateAsistenciaMainRecordService({
+          idEmpleado: codEmpArchivo || usuarioActValue,
+          fechaAsistencia,
+          lat,
+          lon,
+        });
+        console.log('[registerAsistencia][MAIN_RECORD_UPDATED]', asistenciaUpdate);
+      } catch (updateError) {
+        console.warn('[registerAsistencia][MAIN_RECORD_UPDATE_WARN]', updateError?.message || updateError);
+      }
+    }
 
     if (asistenciaRegistrada && tipoNormalizado === 'INGRESO' && ENABLE_ASISTENCIA_TRACKING_V1) {
       const currentLimaParts = getCurrentLimaDateParts();
@@ -228,6 +243,7 @@ export const registerAsistencia = async (req, res) => {
       imagenEnviada: !!imagenBase64,
       imagenSubida: uploadResult?.success || false,
       imagenSharePointUrl: imagenSharePointUrl || null,
+      asistenciaUpdate,
       trackingSession,
     });
 
@@ -243,7 +259,7 @@ export const registerAsistencia = async (req, res) => {
       });
     }
     
-    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, rowsAffected, imageUpload: uploadResult, imagen: imagenSharePointUrl, trackingSession });
+    res.json({ success: true, deployMarker: ASISTENCIA_BACKEND_DEPLOY_MARKER, result: resultRows, rowsAffected, imageUpload: uploadResult, imagen: imagenSharePointUrl, asistenciaUpdate, trackingSession });
   } catch (error) {
     console.error('[registerAsistencia][CONTROLLER_ERROR]', error);
     const errorMsg = error?.message || String(error);

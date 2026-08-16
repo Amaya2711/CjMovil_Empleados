@@ -39,6 +39,40 @@ const getCurrentLimaDate = () => {
   return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate(), 12, 0, 0, 0);
 };
 
+const getCurrentLimaDateTimeString = () => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const values = {};
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+
+  if (values.year && values.month && values.day && values.hour && values.minute && values.second) {
+    return `${values.year}-${values.month}-${values.day} ${values.hour}:${values.minute}:${values.second}`;
+  }
+
+  const fallback = new Date();
+  const yyyy = String(fallback.getFullYear());
+  const mm = String(fallback.getMonth() + 1).padStart(2, '0');
+  const dd = String(fallback.getDate()).padStart(2, '0');
+  const hh = String(fallback.getHours()).padStart(2, '0');
+  const min = String(fallback.getMinutes()).padStart(2, '0');
+  const ss = String(fallback.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+};
+
 const formatTrackingDateTimeLima = (value) => {
   if (!value && value !== 0) return null;
 
@@ -200,6 +234,64 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, co
   // Devolver el resultado completo para que el controlador pueda decidir
   // éxito tanto por filas retornadas como por rowsAffected.
   return result;
+};
+
+export const updateAsistenciaMainRecordService = async ({ idEmpleado, fechaAsistencia, lat, lon }) => {
+  const pool = await getConnection();
+  const idEmpleadoNumber = Number.parseInt(String(idEmpleado ?? '').trim(), 10);
+  if (!Number.isFinite(idEmpleadoNumber)) {
+    throw new Error('IdEmpleado inválido para actualizar Asistencia');
+  }
+
+  const fecha = parseAsistenciaDate(fechaAsistencia) || getCurrentLimaDate();
+  const latNumber = (lat === null || typeof lat === 'undefined' || String(lat).trim() === '') ? null : Number(lat);
+  const lonNumber = (lon === null || typeof lon === 'undefined' || String(lon).trim() === '') ? null : Number(lon);
+  const latValue = Number.isFinite(latNumber) ? latNumber : null;
+  const lonValue = Number.isFinite(lonNumber) ? lonNumber : null;
+  const horaValue = getCurrentLimaDateTimeString();
+
+  const columnTypeRequest = pool.request();
+  const columnTypeResult = await columnTypeRequest.query(`
+    SELECT TOP (1) t.name AS TypeName
+    FROM sys.columns c
+    INNER JOIN sys.types t
+      ON c.user_type_id = t.user_type_id
+    WHERE c.object_id = OBJECT_ID('dbo.Asistencia')
+      AND c.name = 'Hora'
+  `);
+
+  const horaTypeName = String(columnTypeResult.recordset?.[0]?.TypeName || '').toLowerCase();
+  let horaSqlExpression = 'CONVERT(datetime2(0), @HoraValue)';
+  if (horaTypeName === 'time') {
+    horaSqlExpression = 'CONVERT(time(0), @HoraValue)';
+  } else if (horaTypeName === 'date') {
+    horaSqlExpression = 'CONVERT(date, @HoraValue)';
+  }
+
+  const request = pool.request();
+  request.input('IdEmpleado', sql.Int, idEmpleadoNumber);
+  request.input('FechaAsistencia', sql.Date, fecha);
+  request.input('HoraValue', sql.VarChar(19), horaValue);
+  request.input('Latitud', sql.Decimal(18, 6), latValue);
+  request.input('Longitud', sql.Decimal(18, 6), lonValue);
+
+  const result = await request.query(`
+    UPDATE dbo.Asistencia
+    SET
+      Hora = ${horaSqlExpression},
+      Latitud = @Latitud,
+      Longitud = @Longitud
+    WHERE (IdEmpleado = @IdEmpleado OR UsuarioAct = @IdEmpleado)
+      AND FechaAsistencia = @FechaAsistencia
+  `);
+
+  return {
+    rowsAffected: Array.isArray(result.rowsAffected)
+      ? result.rowsAffected.reduce((total, current) => total + (Number(current) || 0), 0)
+      : 0,
+    horaTypeName,
+    horaValue,
+  };
 };
 
 export const cargarListadoDiarioService = async (usuarioCre) => {

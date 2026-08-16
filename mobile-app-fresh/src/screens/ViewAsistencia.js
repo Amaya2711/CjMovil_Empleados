@@ -3,7 +3,7 @@ import { View, StyleSheet, FlatList, Platform, Linking, ScrollView, Pressable, T
 import { Text, Button, IconButton, Card, DataTable, Snackbar, Portal, Dialog, MD3Colors, TextInput } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { UserContext } from '../context/UserContext';
-import { getAsistencia, getConstanteOficinas, registerAsistencia, validarListadoDiario } from '../api/asistencia';
+import { getAsistencia, getConstanteOficinas, validarListadoDiario } from '../api/asistencia';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -16,11 +16,15 @@ import {
   sendWebTrackingPoint,
 } from '../features/asistenciaTracking/backgroundLocationTask';
 import {
+  registerAsistenciaQueued,
+  syncPendingAsistenciaQueue,
+} from '../db/asistenciaSyncQueue';
+import {
   ENABLE_BACKGROUND_LOCATION_TRACKING,
   ASISTENCIA_TRACKING_ROLLBACK_MARKER,
   TRACKING_TIME_INTERVAL_MS,
 } from '../features/asistenciaTracking/config';
-// Devuelve la hora en la zona America/Lima; si Intl/timeZone no está disponible, aplica UTC-5
+// Devuelve la hora en la zona America/Lima; si Intl/timeZone no estÃ¡ disponible, aplica UTC-5
 const ASISTENCIA_FRONTEND_DEPLOY_MARKER = 'frontend-2026-07-06-v2';
 
 const getLimaDateParts = () => {
@@ -96,7 +100,7 @@ export default function ViewAsistencia() {
     { maxHeight: 720, compress: 0.35 },
     { maxHeight: 600, compress: 0.25 },
   ];
-  const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicación para registrar INGRESO o SALIDA. Sin ubicación no se grabará la marcación.';
+  const LOCATION_REQUIRED_MESSAGE = 'Debe activar la ubicaciÃ³n para registrar INGRESO o SALIDA. Sin ubicaciÃ³n no se grabarÃ¡ la marcaciÃ³n.';
   const { codEmp, idusuario, cuadrilla } = useContext(UserContext);
   const [activeTab, setActiveTab] = useState('REGISTRO');
   const [selectedResumenEstado, setSelectedResumenEstado] = useState(null);
@@ -179,7 +183,7 @@ export default function ViewAsistencia() {
   const formatDate = (val) => {
     if (!val && val !== 0) return '';
     try {
-      // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversión de zona horaria
+      // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversiÃ³n de zona horaria
       if (typeof val === 'string') {
         const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
         if (match) {
@@ -205,7 +209,7 @@ export default function ViewAsistencia() {
         const formatDateDayMonth = (val) => {
           if (!val && val !== 0) return '';
           try {
-            // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversión de zona horaria
+            // Si es string en formato YYYY-MM-DD o similar, extraer directamente sin conversiÃ³n de zona horaria
             if (typeof val === 'string') {
               const match = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
               if (match) {
@@ -300,7 +304,7 @@ export default function ViewAsistencia() {
           const raw = String(referenceValue).trim();
           if (!raw) return null;
 
-          // Formato típico: "lat,lon" o "lat;lon" o "lat lon"
+          // Formato tÃ­pico: "lat,lon" o "lat;lon" o "lat lon"
           const pairMatch = raw.match(/^\s*(-?\d+(?:[\.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[\.,]\d+)?)\s*$/);
           if (pairMatch) {
             const normalized = normalizeLatLon(pairMatch[1], pairMatch[2]);
@@ -365,7 +369,7 @@ export default function ViewAsistencia() {
             if (!idEmpleado) {
               setData([]);
               setApiDebug(`fetchData:invalid-idEmpleado codEmp=${String(codEmp ?? '')}`);
-              setMessage('No se pudo cargar asistencia: el usuario no tiene un código de empleado numérico válido (CodEmp).');
+              setMessage('No se pudo cargar asistencia: el usuario no tiene un cÃ³digo de empleado numÃ©rico vÃ¡lido (CodEmp).');
               return;
             }
             const constanteOficinas = await getConstanteOficinas();
@@ -396,7 +400,7 @@ export default function ViewAsistencia() {
                 setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
               }
               setApiDebug(`listado-diario:${technicalDetail}`);
-              console.warn('Validación listado diario omitida:', technicalDetail);
+              console.warn('ValidaciÃ³n listado diario omitida:', technicalDetail);
               setIdEstadoDiario(null);
             } else {
               const validacion = await validarListadoDiario({ usuarioCre });
@@ -408,7 +412,7 @@ export default function ViewAsistencia() {
                   setMessage(`No pudimos validar el listado diario. (${technicalDetail})`);
                 }
                 setApiDebug(`listado-diario:${technicalDetail}`);
-                console.warn('Validación listado diario falló:', technicalDetail);
+                console.warn('ValidaciÃ³n listado diario fallÃ³:', technicalDetail);
                 setIdEstadoDiario(null);
               } else {
                 const listadoDiario = Array.isArray(validacion?.data)
@@ -425,7 +429,7 @@ export default function ViewAsistencia() {
             const res = await getAsistencia({ codEmp: idEmpleado });
             if (!mounted.current) return;
             if (!res) {
-              setMessage('Respuesta vacía del servidor');
+              setMessage('Respuesta vacÃ­a del servidor');
               setData([]);
               setApiDebug('null');
             } else if (res.error) {
@@ -467,7 +471,7 @@ export default function ViewAsistencia() {
         useEffect(() => {
           const distance = getDistanceToRequiredPoint(currentCoords);
           if (distance !== null && distance > MAX_DISTANCE_METERS) {
-            setMessage('La ubicación no es cercana al punto requerido (máximo 50 metros).');
+            setMessage('La ubicaciÃ³n no es cercana al punto requerido (mÃ¡ximo 50 metros).');
           }
         }, [currentCoords, valorFin]);
 
@@ -505,11 +509,11 @@ export default function ViewAsistencia() {
               Math.abs(Number(longitude) - (-122.084)) < 0.0006;
 
             if (!isFiniteCoords) {
-              throw new Error('No se pudo obtener coordenadas válidas del GPS.');
+              throw new Error('No se pudo obtener coordenadas vÃ¡lidas del GPS.');
             }
 
             if ((Platform.OS === 'android' && loc?.mocked) || isDefaultAndroidEmulatorPoint) {
-              throw new Error('El emulador está usando ubicación por defecto. Configure una ubicación en el emulador o use un dispositivo físico.');
+              throw new Error('El emulador estÃ¡ usando ubicaciÃ³n por defecto. Configure una ubicaciÃ³n en el emulador o use un dispositivo fÃ­sico.');
             }
             return { latitude, longitude, accuracy };
           } catch (e) {
@@ -543,7 +547,7 @@ export default function ViewAsistencia() {
             mounted.current = true;
             let cancelled = false;
 
-            const syncTrackingQueue = async () => {
+          const syncTrackingQueue = async () => {
               if (!ENABLE_BACKGROUND_LOCATION_TRACKING || cancelled) {
                 return;
               }
@@ -555,12 +559,26 @@ export default function ViewAsistencia() {
               }
             };
 
+            const syncAsistenciaQueue = async () => {
+              if (cancelled) {
+                return;
+              }
+              try {
+                const result = await syncPendingAsistenciaQueue();
+                console.log('[ViewAsistencia][ASISTENCIA_SYNC]', result);
+              } catch (error) {
+                console.warn('[ViewAsistencia][ASISTENCIA_SYNC_WARN]', error?.message || error);
+              }
+            };
+
             checkLocationEnabled();
             refreshCurrentCoordinates();
             fetchData();
             syncTrackingQueue();
+            syncAsistenciaQueue();
             const syncTimer = setInterval(() => {
               syncTrackingQueue();
+              syncAsistenciaQueue();
             }, 60000);
 
             return () => {
@@ -576,12 +594,12 @@ export default function ViewAsistencia() {
           if (registerActionRunning) return;
           setRegisterActionRunning(true);
           if (tipo === 'INGRESO') {
-            console.log('[INGRESO][CLICK] Botón INGRESO presionado');
+            console.log('[INGRESO][CLICK] BotÃ³n INGRESO presionado');
           }
           if (tipo === 'SALIDA') {
-            console.log('[SALIDA][CLICK] Botón SALIDA presionado');
+            console.log('[SALIDA][CLICK] BotÃ³n SALIDA presionado');
           }
-          // Verificar permiso y estado de ubicación
+          // Verificar permiso y estado de ubicaciÃ³n
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
@@ -611,13 +629,13 @@ export default function ViewAsistencia() {
             }
             let warningMessage = '';
             if (coords?.accuracy && coords.accuracy > MAX_GPS_ACCURACY_METERS) {
-              warningMessage = `Precisión GPS insuficiente. Debe ser ≤ ${MAX_GPS_ACCURACY_METERS} m.`;
+              warningMessage = `PrecisiÃ³n GPS insuficiente. Debe ser â‰¤ ${MAX_GPS_ACCURACY_METERS} m.`;
             }
             const distance = getDistanceToRequiredPoint(coords);
             if (distance !== null && distance > MAX_DISTANCE_METERS) {
               warningMessage = warningMessage
-                ? `${warningMessage} La ubicación no es cercana al punto requerido (máximo 50 metros).`
-                : 'La ubicación no es cercana al punto requerido (máximo 50 metros).';
+                ? `${warningMessage} La ubicaciÃ³n no es cercana al punto requerido (mÃ¡ximo 50 metros).`
+                : 'La ubicaciÃ³n no es cercana al punto requerido (mÃ¡ximo 50 metros).';
             }
             if (tipo === 'INGRESO') {
               setPendingIngresoCoords(coords);
@@ -655,7 +673,7 @@ export default function ViewAsistencia() {
             });
           }
           if (!usuarioAct) {
-            setMessage('No se pudo registrar asistencia: no hay un código de empleado numérico válido (CodEmp).');
+            setMessage('No se pudo registrar asistencia: no hay un cÃ³digo de empleado numÃ©rico vÃ¡lido (CodEmp).');
             return;
           }
 
@@ -671,7 +689,7 @@ export default function ViewAsistencia() {
           const fechaAsistencia = `${todayLima.getFullYear()}-${String(todayLima.getMonth() + 1).padStart(2, '0')}-${String(todayLima.getDate()).padStart(2, '0')}`;
           const codEmp = usuarioAct;
           const estadoValidacion = 9;
-          const res = await registerAsistencia({
+          const res = await registerAsistenciaQueued({
             usuarioAct,
             codEmp,
             tipo,
@@ -691,27 +709,34 @@ export default function ViewAsistencia() {
           
           if (res && !res.error && res.success === true) {
             let msg = `${tipo} registrado correctamente`;
-            
-            // 🔍 VALIDACIÓN TEMPORAL: Verificar estado de carga de imagen
-            if (imagenBase64 && nombreImagen) {
-              console.log('[executeRegister][IMAGE_CHECK] Se envió imagen, validando resultado...');
-              console.log('[executeRegister][IMAGE_UPLOAD_RESULT]', res.imageUpload);
+            if (res.synced === false) {
+              msg = `${tipo} guardado localmente. Pendiente de sincronizaciÃ³n.`;
+            }
+             
+            // ðŸ” VALIDACIÃ“N TEMPORAL: Verificar estado de carga de imagen
+            if (res.synced === true && imagenBase64 && nombreImagen) {
+              console.log('[executeRegister][IMAGE_CHECK] Se enviÃ³ imagen, validando resultado...');
+              console.log('[executeRegister][IMAGE_UPLOAD_RESULT]', res.serverResponse?.imageUpload);
               
-              if (res.imageUpload) {
-                if (res.imageUpload.success === true) {
-                  msg += ' ✅ IMAGEN SUBIDA A SHAREPOINT';
-                  console.log('[executeRegister][IMAGE_SUCCESS] URL:', res.imageUpload.fileUrl);
+              if (res.serverResponse?.imageUpload) {
+                if (res.serverResponse.imageUpload.success === true) {
+                  msg += ' âœ… IMAGEN SUBIDA A SHAREPOINT';
+                  console.log('[executeRegister][IMAGE_SUCCESS] URL:', res.serverResponse.imageUpload.fileUrl);
                 } else {
-                  msg += ` ⚠️ IMAGEN NO SUBIDA: ${res.imageUpload.error || 'Error desconocido'}`;
-                  console.warn('[executeRegister][IMAGE_FAILED]', res.imageUpload);
+                  msg += ` âš ï¸ IMAGEN NO SUBIDA: ${res.serverResponse.imageUpload.error || 'Error desconocido'}`;
+                  console.warn('[executeRegister][IMAGE_FAILED]', res.serverResponse.imageUpload);
                 }
               } else {
-                msg += ' ⚠️ NO HAY RESPUESTA DE SHAREPOINT';
+                msg += ' âš ï¸ NO HAY RESPUESTA DE SHAREPOINT';
                 console.warn('[executeRegister][IMAGE_NO_RESPONSE] imageUpload es null/undefined');
               }
             }
             
-            if (ENABLE_BACKGROUND_LOCATION_TRACKING) {
+            if (imagenBase64 && nombreImagen && res.synced === false) {
+              msg += ' | Imagen pendiente de sincronización';
+            }
+
+            if (ENABLE_BACKGROUND_LOCATION_TRACKING && res.synced === true) {
               try {
                 if (tipo === 'INGRESO') {
                   const trackingResult = await startTrackingSession({
@@ -754,12 +779,16 @@ export default function ViewAsistencia() {
                 );
                 msg += ' | Marcacion registrada sin seguimiento';
               }
+            } else if (ENABLE_BACKGROUND_LOCATION_TRACKING && res.synced === false) {
+              msg += ' | El seguimiento se activara cuando se sincronice';
             }
 
             setMessage(msg);
             setActiveTab('RESUMEN');
             setSelectedResumenEstado('__ALL__');
-            await fetchData();
+            if (res.synced === true) {
+              await fetchData();
+            }
           } else {
             // Mostrar mensaje de error detallado
             const errorDetails = res.message || 'Error al registrar asistencia';
@@ -985,33 +1014,33 @@ export default function ViewAsistencia() {
 
         const tomarFotoIngreso = async () => {
           try {
-            console.log('[tomarFotoIngreso] Solicitando permiso de cámara...');
+            console.log('[tomarFotoIngreso] Solicitando permiso de cÃ¡mara...');
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            console.log('[tomarFotoIngreso] Estado permiso cámara:', status);
+            console.log('[tomarFotoIngreso] Estado permiso cÃ¡mara:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de camara para tomar foto');
-              console.warn('[tomarFotoIngreso] Permiso cámara rechazado');
+              console.warn('[tomarFotoIngreso] Permiso cÃ¡mara rechazado');
               return;
             }
             
-            console.log('[tomarFotoIngreso] Abriendo cámara...');
+            console.log('[tomarFotoIngreso] Abriendo cÃ¡mara...');
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              // Quality: 1.0 = sin compresión (máxima calidad HD)
+              // Quality: 1.0 = sin compresiÃ³n (mÃ¡xima calidad HD)
               quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
-            console.log('[tomarFotoIngreso] Resultado cámara:', {
+            console.log('[tomarFotoIngreso] Resultado cÃ¡mara:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[tomarFotoIngreso] ✓ Foto capturada exitosamente:', {
+              console.log('[tomarFotoIngreso] âœ“ Foto capturada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1021,7 +1050,7 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
-                console.error('[tomarFotoIngreso] ✗ Asset sin URI');
+                console.error('[tomarFotoIngreso] âœ— Asset sin URI');
                 return;
               }
               setIngresoFoto(asset);
@@ -1029,7 +1058,7 @@ export default function ViewAsistencia() {
               console.log('[tomarFotoIngreso] Captura cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[tomarFotoIngreso] ✗ Error:', error.message);
+            console.error('[tomarFotoIngreso] âœ— Error:', error.message);
             console.error('[tomarFotoIngreso] Stack:', error.stack);
             setMessage('Error al tomar foto: ' + error.message);
           }
@@ -1037,17 +1066,17 @@ export default function ViewAsistencia() {
 
         const tomarFotoSalida = async () => {
           try {
-            console.log('[tomarFotoSalida] Solicitando permiso de cámara...');
+            console.log('[tomarFotoSalida] Solicitando permiso de cÃ¡mara...');
             const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            console.log('[tomarFotoSalida] Estado permiso cámara:', status);
+            console.log('[tomarFotoSalida] Estado permiso cÃ¡mara:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de camara para tomar foto');
-              console.warn('[tomarFotoSalida] Permiso cámara rechazado');
+              console.warn('[tomarFotoSalida] Permiso cÃ¡mara rechazado');
               return;
             }
             
-            console.log('[tomarFotoSalida] Abriendo cámara...');
+            console.log('[tomarFotoSalida] Abriendo cÃ¡mara...');
             const result = await ImagePicker.launchCameraAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
@@ -1055,14 +1084,14 @@ export default function ViewAsistencia() {
               base64: false,
             });
             
-            console.log('[tomarFotoSalida] Resultado cámara:', {
+            console.log('[tomarFotoSalida] Resultado cÃ¡mara:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[tomarFotoSalida] ✓ Foto capturada exitosamente:', {
+              console.log('[tomarFotoSalida] âœ“ Foto capturada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1072,7 +1101,7 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la foto tomada. Intente nuevamente.');
-                console.error('[tomarFotoSalida] ✗ Asset sin URI');
+                console.error('[tomarFotoSalida] âœ— Asset sin URI');
                 return;
               }
               setSalidaFoto(asset);
@@ -1080,7 +1109,7 @@ export default function ViewAsistencia() {
               console.log('[tomarFotoSalida] Captura cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[tomarFotoSalida] ✗ Error:', error.message);
+            console.error('[tomarFotoSalida] âœ— Error:', error.message);
             console.error('[tomarFotoSalida] Stack:', error.stack);
             setMessage('Error al tomar foto: ' + error.message);
           }
@@ -1088,17 +1117,17 @@ export default function ViewAsistencia() {
 
         const seleccionarImagenSalida = async () => {
           try {
-            console.log('[seleccionarImagenSalida] Solicitando permiso de librería de medios...');
+            console.log('[seleccionarImagenSalida] Solicitando permiso de librerÃ­a de medios...');
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            console.log('[seleccionarImagenSalida] Estado permiso galería:', status);
+            console.log('[seleccionarImagenSalida] Estado permiso galerÃ­a:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de galeria para seleccionar foto');
-              console.warn('[seleccionarImagenSalida] Permiso galería rechazado');
+              console.warn('[seleccionarImagenSalida] Permiso galerÃ­a rechazado');
               return;
             }
             
-            console.log('[seleccionarImagenSalida] Abriendo galería...');
+            console.log('[seleccionarImagenSalida] Abriendo galerÃ­a...');
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
@@ -1106,14 +1135,14 @@ export default function ViewAsistencia() {
               base64: false,
             });
             
-            console.log('[seleccionarImagenSalida] Resultado galería:', {
+            console.log('[seleccionarImagenSalida] Resultado galerÃ­a:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[seleccionarImagenSalida] ✓ Imagen seleccionada exitosamente:', {
+              console.log('[seleccionarImagenSalida] âœ“ Imagen seleccionada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1123,15 +1152,15 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
-                console.error('[seleccionarImagenSalida] ✗ Asset sin URI');
+                console.error('[seleccionarImagenSalida] âœ— Asset sin URI');
                 return;
               }
               setSalidaFoto(asset);
             } else {
-              console.log('[seleccionarImagenSalida] Selección cancelada por el usuario');
+              console.log('[seleccionarImagenSalida] SelecciÃ³n cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[seleccionarImagenSalida] ✗ Error:', error.message);
+            console.error('[seleccionarImagenSalida] âœ— Error:', error.message);
             console.error('[seleccionarImagenSalida] Stack:', error.stack);
             setMessage('Error al seleccionar imagen: ' + error.message);
           }
@@ -1139,33 +1168,33 @@ export default function ViewAsistencia() {
 
         const seleccionarImagenIngreso = async () => {
           try {
-            console.log('[seleccionarImagenIngreso] Solicitando permiso de librería de medios...');
+            console.log('[seleccionarImagenIngreso] Solicitando permiso de librerÃ­a de medios...');
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            console.log('[seleccionarImagenIngreso] Estado permiso galería:', status);
+            console.log('[seleccionarImagenIngreso] Estado permiso galerÃ­a:', status);
             
             if (status !== 'granted') {
               setMessage('Se requiere permiso de galeria para seleccionar foto');
-              console.warn('[seleccionarImagenIngreso] Permiso galería rechazado');
+              console.warn('[seleccionarImagenIngreso] Permiso galerÃ­a rechazado');
               return;
             }
             
-            console.log('[seleccionarImagenIngreso] Abriendo galería...');
+            console.log('[seleccionarImagenIngreso] Abriendo galerÃ­a...');
             const result = await ImagePicker.launchImageLibraryAsync({
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
-              // Quality: 1.0 = sin compresión (máxima calidad HD)
+              // Quality: 1.0 = sin compresiÃ³n (mÃ¡xima calidad HD)
               quality: IMAGE_PICKER_QUALITY,
               base64: false,
             });
             
-            console.log('[seleccionarImagenIngreso] Resultado galería:', {
+            console.log('[seleccionarImagenIngreso] Resultado galerÃ­a:', {
               canceled: result.canceled,
               assetsLength: result.assets?.length,
             });
             
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              console.log('[seleccionarImagenIngreso] ✓ Imagen seleccionada exitosamente:', {
+              console.log('[seleccionarImagenIngreso] âœ“ Imagen seleccionada exitosamente:', {
                 uri: asset.uri,
                 width: asset.width,
                 height: asset.height,
@@ -1175,15 +1204,15 @@ export default function ViewAsistencia() {
               
               if (!asset?.uri) {
                 setMessage('No se pudo procesar la imagen seleccionada. Intente con otra imagen.');
-                console.error('[seleccionarImagenIngreso] ✗ Asset sin URI');
+                console.error('[seleccionarImagenIngreso] âœ— Asset sin URI');
                 return;
               }
               setIngresoFoto(asset);
             } else {
-              console.log('[seleccionarImagenIngreso] Selección cancelada por el usuario');
+              console.log('[seleccionarImagenIngreso] SelecciÃ³n cancelada por el usuario');
             }
           } catch (error) {
-            console.error('[seleccionarImagenIngreso] ✗ Error:', error.message);
+            console.error('[seleccionarImagenIngreso] âœ— Error:', error.message);
             console.error('[seleccionarImagenIngreso] Stack:', error.stack);
             setMessage('Error al seleccionar imagen: ' + error.message);
           }
@@ -1222,7 +1251,7 @@ export default function ViewAsistencia() {
                 const imageBytes = imagenBase64.length * 0.75;
                 const sizeInKB = (imageBytes / 1024).toFixed(2);
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
-                console.log('[confirmIngresoRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
+                console.log('[confirmIngresoRegister] âœ“ Imagen convertida a base64 - TamaÃ±o:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
                 // convertImageToBase64 ya entrega una imagen optimizada <= 5MB o lanza error claro
                 
@@ -1232,10 +1261,10 @@ export default function ViewAsistencia() {
                 const dd = String(d.getDate()).padStart(2, '0');
                 const codEmpArchivo = String(resolveNumericEmployeeId() || 'SINCOD').trim();
                 nombreImagen = `INGRESO_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
-                console.log('[confirmIngresoRegister] ✓ Nombre de imagen asignado:', nombreImagen);
+                console.log('[confirmIngresoRegister] âœ“ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmIngresoRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
               } catch (error) {
-                console.error('[confirmIngresoRegister] ✗ ERROR imagen:', error.message);
+                console.error('[confirmIngresoRegister] âœ— ERROR imagen:', error.message);
                 console.error('[confirmIngresoRegister] Stack:', error.stack);
                 
                 let userMsg = 'Error al procesar imagen: ';
@@ -1315,7 +1344,7 @@ export default function ViewAsistencia() {
                 const imageBytes = imagenBase64.length * 0.75;
                 const sizeInKB = (imageBytes / 1024).toFixed(2);
                 const sizeInMB = (imageBytes / 1024 / 1024).toFixed(2);
-                console.log('[confirmSalidaRegister] ✓ Imagen convertida a base64 - Tamaño:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
+                console.log('[confirmSalidaRegister] âœ“ Imagen convertida a base64 - TamaÃ±o:', sizeInKB, 'KB (~' + sizeInMB + 'MB)');
                 
                 // convertImageToBase64 ya entrega una imagen optimizada <= 5MB o lanza error claro
                 
@@ -1325,10 +1354,10 @@ export default function ViewAsistencia() {
                 const dd = String(d.getDate()).padStart(2, '0');
                 const codEmpArchivo = String(resolveNumericEmployeeId() || 'SINCOD').trim();
                 nombreImagen = `SALIDA_${codEmpArchivo}_${yyyy}_${mm}_${dd}.jpg`;
-                console.log('[confirmSalidaRegister] ✓ Nombre de imagen asignado:', nombreImagen);
+                console.log('[confirmSalidaRegister] âœ“ Nombre de imagen asignado:', nombreImagen);
                 console.log('[confirmSalidaRegister] ========== PROCESAMIENTO DE IMAGEN COMPLETADO ==========');
               } catch (error) {
-                console.error('[confirmSalidaRegister] ✗ ERROR imagen:', error.message);
+                console.error('[confirmSalidaRegister] âœ— ERROR imagen:', error.message);
                 console.error('[confirmSalidaRegister] Stack:', error.stack);
                 
                 let userMsg = 'Error al procesar imagen: ';
@@ -1349,7 +1378,7 @@ export default function ViewAsistencia() {
               }
             }
             
-            // IMPORTANTE: Obtener comentario existente del último registro y agregarlo
+            // IMPORTANTE: Obtener comentario existente del Ãºltimo registro y agregarlo
             const source = Array.isArray(data) ? data : [];
             let comentarioCompleto = comentario;
             if (source.length > 0) {
@@ -1380,19 +1409,19 @@ export default function ViewAsistencia() {
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
-            setMessage('Permiso de ubicación no otorgado. Active la ubicación para continuar.');
+            setMessage('Permiso de ubicaciÃ³n no otorgado. Active la ubicaciÃ³n para continuar.');
             return;
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicación del dispositivo está desactivada. Active la ubicación para continuar.');
+            setMessage('La ubicaciÃ³n del dispositivo estÃ¡ desactivada. Active la ubicaciÃ³n para continuar.');
             return;
           }
           try {
             setLoadingCompareLocation(true);
             const refCoords = parseReferenceCoords(valorFin);
             if (!refCoords) {
-              setMessage('No se pudo obtener un punto válido en ValorFin para comparar.');
+              setMessage('No se pudo obtener un punto vÃ¡lido en ValorFin para comparar.');
               return;
             }
             const coords = await getCurrentPosition();
@@ -1405,12 +1434,12 @@ export default function ViewAsistencia() {
             }
             const formattedDistance = `${distance.toFixed(2)} m`;
             if (distance <= MAX_DISTANCE_METERS) {
-              setMessage(`Ubicación válida. Distancia al punto requerido: ${formattedDistance}.`);
+              setMessage(`UbicaciÃ³n vÃ¡lida. Distancia al punto requerido: ${formattedDistance}.`);
             } else {
-              setMessage(`La ubicación no es cercana al punto requerido. Distancia: ${formattedDistance}. Máximo permitido: ${MAX_DISTANCE_METERS} m.`);
+              setMessage(`La ubicaciÃ³n no es cercana al punto requerido. Distancia: ${formattedDistance}. MÃ¡ximo permitido: ${MAX_DISTANCE_METERS} m.`);
             }
           } catch (e) {
-            setMessage('No se pudo comparar la ubicación actual con ValorFin.');
+            setMessage('No se pudo comparar la ubicaciÃ³n actual con ValorFin.');
           } finally {
             setLoadingCompareLocation(false);
           }
@@ -1424,12 +1453,12 @@ export default function ViewAsistencia() {
           const okPerm = await requestLocationPermission();
           if (!okPerm) {
             setHasLocation(false);
-            setMessage('Permiso de ubicación no otorgado. Active la ubicación para continuar.');
+            setMessage('Permiso de ubicaciÃ³n no otorgado. Active la ubicaciÃ³n para continuar.');
             return;
           }
           const enabled = await checkLocationEnabled();
           if (!enabled) {
-            setMessage('La ubicación del dispositivo está desactivada. Active la ubicación para continuar.');
+            setMessage('La ubicaciÃ³n del dispositivo estÃ¡ desactivada. Active la ubicaciÃ³n para continuar.');
             return;
           }
           try {
@@ -1496,7 +1525,7 @@ export default function ViewAsistencia() {
                         const latSalida = item.LatitudSalida ?? item.latitudSalida ?? null;
                         const lonSalida = item.LongitudSalida ?? item.longitudSalida ?? null;
                         if (!latSalida || !lonSalida) {
-                          setMessage('Ubicación de salida no encontrada');
+                          setMessage('UbicaciÃ³n de salida no encontrada');
                           return;
                         }
                         const url = `https://www.google.com/maps/search/?api=1&query=${latSalida},${lonSalida}`;
@@ -1613,7 +1642,7 @@ export default function ViewAsistencia() {
           <Card style={{ marginBottom: 8 }}>
             <Card.Content>
               <Text style={{ fontWeight: '700' }}>#{index + 1} - {formatDateDayMonth(item.FechaAsistencia ?? item.fecha ?? '')} {formatTime(item.Hora ?? item.hora ?? '')}</Text>
-              <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  Marcación: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
+              <Text>{`Estado: ${item.Estado ?? item.estado ?? ''}  MarcaciÃ³n: ${item.EstadoMarcacion ?? item.estadoMarcacion ?? ''}`}</Text>
               <Text>{`Ingreso: ${formatTime(item.Hora ?? item.hora ?? '')} | Salida: ${formatTime(item.HoraSalida ?? item.horaSalida ?? '')} | Tiempo Trabajado: ${formatTime(item.TiempoTrabajado ?? item.tiempoTrabajado ?? '')}`}</Text>
               <Text numberOfLines={2} ellipsizeMode="tail">{JSON.stringify(item)}</Text>
             </Card.Content>
@@ -1646,11 +1675,11 @@ export default function ViewAsistencia() {
               {!hasLocation && (
                 <Card style={{ marginBottom: 12, padding: 10, backgroundColor: '#fff3f3' }}>
                   <Card.Content>
-                    <Text style={{ color: '#a00', fontWeight: '700' }}>Ubicación desactivada</Text>
-                    <Text>Active la ubicación o permisos para registrar INGRESO/SALIDA.</Text>
+                    <Text style={{ color: '#a00', fontWeight: '700' }}>UbicaciÃ³n desactivada</Text>
+                    <Text>Active la ubicaciÃ³n o permisos para registrar INGRESO/SALIDA.</Text>
                     <View style={{ marginTop: 8 }}>
                         <Button mode="outlined" onPress={() => openLocationSettings()}>
-                          Abrir configuración
+                          Abrir configuraciÃ³n
                         </Button>
                     </View>
                   </Card.Content>
@@ -1690,20 +1719,20 @@ export default function ViewAsistencia() {
                     loading={loadingCurrentLocation}
                     disabled={loadingCurrentLocation || !hasLocation}
                   >
-                    VER UBICACIÓN ACTUAL
+                    VER UBICACIÃ“N ACTUAL
                   </Button>
                 </>
               )}
 
             <Portal>
               <Dialog visible={locationDialogVisible} onDismiss={closeLocationDialog}>
-                <Dialog.Title>Abrir ubicación actual</Dialog.Title>
+                <Dialog.Title>Abrir ubicaciÃ³n actual</Dialog.Title>
                 <Dialog.Content>
-                  <Text>¿Desea visualizar su ubicación actual en Google Maps?</Text>
+                  <Text>Â¿Desea visualizar su ubicaciÃ³n actual en Google Maps?</Text>
                 </Dialog.Content>
                 <Dialog.Actions>
                   <Button onPress={closeLocationDialog}>No</Button>
-                  <Button onPress={openCurrentLocationInMap} loading={loadingCurrentLocation} disabled={loadingCurrentLocation}>Sí, ver en mapa</Button>
+                  <Button onPress={openCurrentLocationInMap} loading={loadingCurrentLocation} disabled={loadingCurrentLocation}>SÃ­, ver en mapa</Button>
                 </Dialog.Actions>
               </Dialog>
 
@@ -1718,7 +1747,7 @@ export default function ViewAsistencia() {
                     maxLength={250}
                     multiline
                     numberOfLines={4}
-                    placeholder="Escriba aquí el motivo..."
+                    placeholder="Escriba aquÃ­ el motivo..."
                     textColor="#231F36"
                     style={styles.ingresoCommentInput}
                   />
@@ -1782,7 +1811,7 @@ export default function ViewAsistencia() {
                     maxLength={250}
                     multiline
                     numberOfLines={4}
-                    placeholder="Escriba aquí el motivo..."
+                    placeholder="Escriba aquÃ­ el motivo..."
                     textColor="#231F36"
                     style={styles.ingresoCommentInput}
                   />

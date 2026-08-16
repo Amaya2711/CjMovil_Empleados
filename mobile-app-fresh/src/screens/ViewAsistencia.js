@@ -508,7 +508,7 @@ export default function ViewAsistencia() {
         useEffect(() => {
           const distance = getDistanceToRequiredPoint(currentCoords);
           if (distance !== null && distance > MAX_DISTANCE_METERS) {
-            setMessage('La ubicación no es cercana al punto requerido (móÂ¡ximo 50 metros).');
+            setMessage('La ubicación no es cercana al punto requerido (máximo 50 metros).');
           }
         }, [currentCoords, valorFin]);
 
@@ -1802,7 +1802,7 @@ export default function ViewAsistencia() {
                     maxLength={250}
                     multiline
                     numberOfLines={4}
-                    placeholder="Escriba aquóÂ­ el motivo..."
+                    placeholder="Escriba aquí­ el motivo..."
                     textColor="#231F36"
                     style={styles.ingresoCommentInput}
                   />
@@ -1866,7 +1866,7 @@ export default function ViewAsistencia() {
                     maxLength={250}
                     multiline
                     numberOfLines={4}
-                    placeholder="Escriba aquóÂ­ el motivo..."
+                    placeholder="Escriba aquí­ el motivo..."
                     textColor="#231F36"
                     style={styles.ingresoCommentInput}
                   />

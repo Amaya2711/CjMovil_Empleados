@@ -13,6 +13,7 @@ import {
   startTrackingSession,
   stopTrackingSession,
   syncQueuedTrackingPoints,
+  getTrackingDebugEntries,
   sendWebTrackingPoint,
 } from '../features/asistenciaTracking/backgroundLocationTask';
 import {
@@ -134,6 +135,9 @@ export default function ViewAsistencia() {
   const [syncDebugVisible, setSyncDebugVisible] = useState(false);
   const [syncDebugLoading, setSyncDebugLoading] = useState(false);
   const [syncDebugRows, setSyncDebugRows] = useState([]);
+  const [trackingDebugVisible, setTrackingDebugVisible] = useState(false);
+  const [trackingDebugLoading, setTrackingDebugLoading] = useState(false);
+  const [trackingDebugRows, setTrackingDebugRows] = useState([]);
   const pageSize = 31; // show up to 31 records in one page by default
   const mounted = useRef(true);
   const webTrackingTimerRef = useRef(null);
@@ -183,6 +187,20 @@ export default function ViewAsistencia() {
       setMessage('No se pudo leer la cola local de asistencia.');
     } finally {
       setSyncDebugLoading(false);
+    }
+  }, []);
+
+  const loadTrackingDebugRows = useCallback(async () => {
+    setTrackingDebugLoading(true);
+    try {
+      const rows = await getTrackingDebugEntries();
+      setTrackingDebugRows(Array.isArray(rows) ? rows.slice().reverse() : []);
+      setTrackingDebugVisible(true);
+    } catch (error) {
+      console.warn('[ViewAsistencia][TRACKING_DEBUG_WARN]', error?.message || error);
+      setMessage('No se pudo leer el log de tracking.');
+    } finally {
+      setTrackingDebugLoading(false);
     }
   }, []);
 
@@ -1749,6 +1767,15 @@ export default function ViewAsistencia() {
                   >
                     VER COLA LOCAL
                   </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={loadTrackingDebugRows}
+                    style={styles.locationButton}
+                    loading={trackingDebugLoading}
+                    disabled={trackingDebugLoading}
+                  >
+                    VER LOG TRACKING
+                  </Button>
                 </>
               )}
 
@@ -1921,6 +1948,40 @@ export default function ViewAsistencia() {
                 <Dialog.Actions>
                   <Button onPress={() => setSyncDebugVisible(false)}>Cerrar</Button>
                   <Button onPress={loadSyncDebugRows} loading={syncDebugLoading} disabled={syncDebugLoading}>
+                    Recargar
+                  </Button>
+                </Dialog.Actions>
+              </Dialog>
+
+              <Dialog visible={trackingDebugVisible} onDismiss={() => setTrackingDebugVisible(false)}>
+                <Dialog.Title>Log de tracking</Dialog.Title>
+                <Dialog.Content>
+                  <Text style={{ marginBottom: 8 }}>
+                    {trackingDebugRows.length} evento(s) registrados.
+                  </Text>
+                  <ScrollView style={styles.debugList} contentContainerStyle={{ paddingBottom: 12 }}>
+                    {trackingDebugRows.length === 0 ? (
+                      <Text style={styles.debugEmpty}>Todavia no hay eventos de tracking guardados.</Text>
+                    ) : (
+                      trackingDebugRows.map((item, index) => (
+                        <Card key={`${String(item.timestamp || 'ts')}_${index}`} style={styles.debugCard}>
+                          <Card.Content>
+                            <Text style={styles.debugTitle}>{String(item.type || 'tracking')}</Text>
+                            <Text style={styles.debugLine}>Hora: {String(item.timestamp || '')}</Text>
+                            <Text style={styles.debugLine}>Sesion: {String(item.sessionId || '')}</Text>
+                            <Text style={styles.debugLine}>Puntos: {String(item.pointsCount ?? item.receivedCount ?? item.queuedCount ?? '')}</Text>
+                            <Text style={styles.debugLine} numberOfLines={4} ellipsizeMode="tail">
+                              {JSON.stringify(item)}
+                            </Text>
+                          </Card.Content>
+                        </Card>
+                      ))
+                    )}
+                  </ScrollView>
+                </Dialog.Content>
+                <Dialog.Actions>
+                  <Button onPress={() => setTrackingDebugVisible(false)}>Cerrar</Button>
+                  <Button onPress={loadTrackingDebugRows} loading={trackingDebugLoading} disabled={trackingDebugLoading}>
                     Recargar
                   </Button>
                 </Dialog.Actions>

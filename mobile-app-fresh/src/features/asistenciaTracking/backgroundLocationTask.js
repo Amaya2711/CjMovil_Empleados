@@ -26,6 +26,8 @@ const TRACKING_DIRECTORY = FileSystem.documentDirectory
   : null;
 const SESSION_FILE = TRACKING_DIRECTORY ? `${TRACKING_DIRECTORY}session.json` : null;
 const QUEUE_FILE = TRACKING_DIRECTORY ? `${TRACKING_DIRECTORY}queue.json` : null;
+const DEBUG_FILE = TRACKING_DIRECTORY ? `${TRACKING_DIRECTORY}debug.json` : null;
+const TRACKING_DEBUG_MAX_ENTRIES = 100;
 
 const isNativeBackgroundTrackingSupported = ENABLE_BACKGROUND_LOCATION_TRACKING && isBackgroundTrackingSupportedPlatform;
 const isTrackingSessionSupported = ENABLE_BACKGROUND_LOCATION_TRACKING;
@@ -75,6 +77,21 @@ const readSession = async () => readJsonFile(SESSION_FILE, null);
 const writeSession = async (session) => writeJsonFile(SESSION_FILE, session);
 const readQueue = async () => readJsonFile(QUEUE_FILE, []);
 const writeQueue = async (queue) => writeJsonFile(QUEUE_FILE, queue);
+const readDebugLog = async () => readJsonFile(DEBUG_FILE, []);
+const writeDebugLog = async (entries) => writeJsonFile(DEBUG_FILE, entries);
+
+const appendDebugEvent = async (event) => {
+  if (!DEBUG_FILE) return;
+  const current = await readDebugLog();
+  const next = [
+    ...(Array.isArray(current) ? current : []),
+    {
+      timestamp: new Date().toISOString(),
+      ...event,
+    },
+  ].slice(-TRACKING_DEBUG_MAX_ENTRIES);
+  await writeDebugLog(next);
+};
 
 const toFiniteNumber = (value) => {
   const numericValue = Number(value);
@@ -145,12 +162,6 @@ const isPointNearLastPoint = (currentPoint, lastPoint) => {
 
   const currentCapturedAt = Number(currentPoint.capturedAtMs);
   const lastCapturedAt = Number(lastPoint.capturedAtMs);
-  if (Number.isFinite(currentCapturedAt) && Number.isFinite(lastCapturedAt)) {
-    const elapsedMs = currentCapturedAt - lastCapturedAt;
-    if (elapsedMs < TRACKING_TIME_INTERVAL_MS) {
-      return true;
-    }
-  }
 
   const distance = calculateDistanceMeters(
     currentPoint.latitud,
@@ -158,7 +169,22 @@ const isPointNearLastPoint = (currentPoint, lastPoint) => {
     lastPoint.latitud,
     lastPoint.longitud
   );
-  return Number.isFinite(distance) && distance <= 5;
+  const isTooClose = Number.isFinite(distance) && distance <= 5;
+
+  if (isTooClose) {
+    return true;
+  }
+
+  if (Number.isFinite(currentCapturedAt) && Number.isFinite(lastCapturedAt)) {
+    const elapsedMs = currentCapturedAt - lastCapturedAt;
+    if (elapsedMs < TRACKING_TIME_INTERVAL_MS) {
+      // Si el punto ya cambió de ubicación, no lo descartamos solo por tiempo.
+      // La regla de 5 minutos sigue ayudando a evitar ruido cuando el punto es casi igual.
+      return false;
+    }
+  }
+
+  return false;
 };
 
 const normalizePoint = (location, session) => {
@@ -213,6 +239,12 @@ const flushQueuedPoints = async () => {
       usuarioAct: session.usuarioAct,
       points: queue,
     });
+    await appendDebugEvent({
+      type: 'flush_success',
+      sessionId: session.sessionId,
+      pointsCount: queue.length,
+      lastPoint: getPointSummary(queue[queue.length - 1] || null),
+    });
     const lastPoint = queue[queue.length - 1] || null;
     await writeSession({
       ...session,
@@ -223,6 +255,12 @@ const flushQueuedPoints = async () => {
     return { sent: queue.length };
   } catch (error) {
     console.warn('[tracking][flushQueuedPoints]', error?.message);
+    await appendDebugEvent({
+      type: 'flush_error',
+      sessionId: session.sessionId,
+      error: error?.message || String(error),
+      pointsCount: queue.length,
+    });
     return { sent: 0, error: error?.message || String(error) };
   }
 };
@@ -294,6 +332,14 @@ if (isNativeBackgroundTrackingSupported && !TaskManager.isTaskDefined(TRACKING_T
       newPointsCount: filteredPoints.length,
       nextQueueCount: nextQueue.length,
     });
+    await appendDebugEvent({
+      type: 'batch_received',
+      sessionId: session.sessionId,
+      receivedCount: locations.length,
+      validCount: points.length,
+      queuedCount: filteredPoints.length,
+      points: filteredPoints.map((point) => getPointSummary(point)),
+    });
     await writeQueue(nextQueue);
     await writeSession({
       ...session,
@@ -309,6 +355,11 @@ if (isNativeBackgroundTrackingSupported && !TaskManager.isTaskDefined(TRACKING_T
 
 export const syncQueuedTrackingPoints = async () => {
   return flushQueuedPoints();
+};
+
+export const getTrackingDebugEntries = async () => {
+  const entries = await readDebugLog();
+  return Array.isArray(entries) ? entries : [];
 };
 
 export const startTrackingSession = async ({

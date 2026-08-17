@@ -236,7 +236,7 @@ export const registerAsistenciaService = async ({ usuarioAct, tipo, lat, lon, co
   return result;
 };
 
-export const updateAsistenciaMainRecordService = async ({ idEmpleado, fechaAsistencia, lat, lon }) => {
+export const updateAsistenciaMainRecordService = async ({ idEmpleado, fechaAsistencia, lat, lon, tipo }) => {
   const pool = await getConnection();
   const idEmpleadoNumber = Number.parseInt(String(idEmpleado ?? '').trim(), 10);
   if (!Number.isFinite(idEmpleadoNumber)) {
@@ -249,6 +249,8 @@ export const updateAsistenciaMainRecordService = async ({ idEmpleado, fechaAsist
   const latValue = Number.isFinite(latNumber) ? latNumber : null;
   const lonValue = Number.isFinite(lonNumber) ? lonNumber : null;
   const horaValue = getCurrentLimaDateTimeString();
+  const tipoValue = String(tipo ?? '').trim().toUpperCase();
+  const esSalida = tipoValue === 'SALIDA';
 
   const columnTypeRequest = pool.request();
   const columnTypeResult = await columnTypeRequest.query(`
@@ -274,13 +276,15 @@ export const updateAsistenciaMainRecordService = async ({ idEmpleado, fechaAsist
   request.input('HoraValue', sql.VarChar(19), horaValue);
   request.input('Latitud', sql.Decimal(18, 6), latValue);
   request.input('Longitud', sql.Decimal(18, 6), lonValue);
+  request.input('LatitudSalida', sql.Decimal(18, 6), latValue);
+  request.input('LongitudSalida', sql.Decimal(18, 6), lonValue);
 
   const result = await request.query(`
     UPDATE dbo.Asistencia
     SET
-      Hora = ${horaSqlExpression},
-      Latitud = @Latitud,
-      Longitud = @Longitud
+      ${esSalida ? 'HoraSalida = CONVERT(datetime2(0), @HoraValue),' : `Hora = ${horaSqlExpression},`}
+      ${esSalida ? 'LatitudSalida = @LatitudSalida,' : 'Latitud = @Latitud,'}
+      ${esSalida ? 'LongitudSalida = @LongitudSalida' : 'Longitud = @Longitud'}
     WHERE (IdEmpleado = @IdEmpleado OR UsuarioAct = @IdEmpleado)
       AND FechaAsistencia = @FechaAsistencia
   `);

@@ -211,6 +211,7 @@ export const registerAsistencia = async (req, res) => {
           fechaAsistencia,
           lat,
           lon,
+          tipo: tipoNormalizado,
         });
         console.log('[registerAsistencia][MAIN_RECORD_UPDATED]', asistenciaUpdate);
       } catch (updateError) {

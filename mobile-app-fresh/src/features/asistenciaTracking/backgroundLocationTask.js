@@ -15,6 +15,7 @@ import {
   TRACKING_DEFERRED_INTERVAL_MS,
   TRACKING_DISTANCE_INTERVAL_METERS,
   TRACKING_MAX_ACCURACY_METERS,
+  TRACKING_MIN_DISTANCE_BETWEEN_POINTS_METERS,
   TRACKING_NOTIFICATION,
   TRACKING_TASK_NAME,
   TRACKING_TIME_INTERVAL_MS,
@@ -163,28 +164,22 @@ const isPointNearLastPoint = (currentPoint, lastPoint) => {
   const currentCapturedAt = Number(currentPoint.capturedAtMs);
   const lastCapturedAt = Number(lastPoint.capturedAtMs);
 
+  if (Number.isFinite(currentCapturedAt) && Number.isFinite(lastCapturedAt)) {
+    const elapsedMs = currentCapturedAt - lastCapturedAt;
+    if (elapsedMs >= TRACKING_TIME_INTERVAL_MS) {
+      // Si ya pasaron 5 minutos o más, conservamos el punto aunque esté muy cerca
+      // del anterior para no perder el regreso por la misma ruta.
+      return false;
+    }
+  }
+
   const distance = calculateDistanceMeters(
     currentPoint.latitud,
     currentPoint.longitud,
     lastPoint.latitud,
     lastPoint.longitud
   );
-  const isTooClose = Number.isFinite(distance) && distance <= 5;
-
-  if (isTooClose) {
-    return true;
-  }
-
-  if (Number.isFinite(currentCapturedAt) && Number.isFinite(lastCapturedAt)) {
-    const elapsedMs = currentCapturedAt - lastCapturedAt;
-    if (elapsedMs < TRACKING_TIME_INTERVAL_MS) {
-      // Si el punto ya cambió de ubicación, no lo descartamos solo por tiempo.
-      // La regla de 5 minutos sigue ayudando a evitar ruido cuando el punto es casi igual.
-      return false;
-    }
-  }
-
-  return false;
+  return Number.isFinite(distance) && distance <= TRACKING_MIN_DISTANCE_BETWEEN_POINTS_METERS;
 };
 
 const normalizePoint = (location, session) => {
